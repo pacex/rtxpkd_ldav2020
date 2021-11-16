@@ -68,6 +68,8 @@ namespace pkd {
           { "deviceCount",     OWL_INT,    OWL_OFFSETOF(RayGenData,deviceCount)},
           { "colorBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData,colorBufferPtr)},
           { "accumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData,accumBufferPtr)},
+          { "normalBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalBufferPtr)},
+          { "normalAccumBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalAccumBufferPtr)},
           { "particleBuffer",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,particleBuffer)},
           { "frameStateBuffer",OWL_BUFPTR, OWL_OFFSETOF(RayGenData,frameStateBuffer)},
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
@@ -121,10 +123,22 @@ namespace pkd {
         if (!colorBuffer)
             colorBuffer = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
         
-        owlBufferResize(colorBuffer, fbSize.x * fbSize.y);
-        
+        owlBufferResize(colorBuffer, fbSize.x * fbSize.y); 
         owlRayGenSetBuffer(rayGen, "colorBuffer", colorBuffer);
+
+        if (!normalAccumBuffer)
+            normalAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
+
+        owlBufferResize(normalAccumBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "normalAccumBuffer", normalAccumBuffer);
+
+        if (!normalBuffer)
+            normalBuffer = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
+
+        owlBufferResize(normalBuffer, fbSize.x * fbSize.y);
+
         owlRayGenSet2i(rayGen, "fbSize", fbSize.x, fbSize.y);
+        owlRayGenSetBuffer(rayGen, "normalBuffer", normalBuffer);
     }
 
     void OptixParticles::updateFrameState(device::FrameState& fs)
@@ -141,5 +155,16 @@ namespace pkd {
     void OptixParticles::unmapColorBuffer()
     {
         assert(colorBuffer);
+    }
+
+    uint32_t* OptixParticles::mapNormalBuffer()
+    {
+        if (!normalBuffer) return nullptr;
+        return (uint32_t*)owlBufferGetPointer(normalBuffer, 0);
+    }
+
+    void OptixParticles::unmapNormalBuffer()
+    {
+        assert(normalBuffer);
     }
 }

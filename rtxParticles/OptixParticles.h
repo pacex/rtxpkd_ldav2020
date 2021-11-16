@@ -51,6 +51,9 @@ namespace pkd {
     uint32_t *mapColorBuffer();
     void unmapColorBuffer();
 
+    uint32_t* mapNormalBuffer();
+    void unmapNormalBuffer();
+
     void render();
     
     /*! size of current frame buffer */
@@ -60,7 +63,9 @@ namespace pkd {
     OWLModule module = 0;
     OWLBuffer frameStateBuffer = 0;
     OWLBuffer colorBuffer = 0;
+    OWLBuffer normalBuffer = 0;
     OWLBuffer accumBuffer = 0;
+    OWLBuffer normalAccumBuffer = 0;
     OWLGroup  world = 0;
     OWLRayGen rayGen = 0;
     OWLBuffer particleBuffer = 0;

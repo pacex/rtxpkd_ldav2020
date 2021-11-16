@@ -28,7 +28,9 @@ namespace pkd {
       int       rec_depth;
       vec2ui    fbSize;
       uint32_t *colorBufferPtr;
+      uint32_t *normalBufferPtr;
       float4   *accumBufferPtr;
+      float4   *normalAccumBufferPtr;
       Particle *particleBuffer;
       FrameState *frameStateBuffer;
     };

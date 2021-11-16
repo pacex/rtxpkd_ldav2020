@@ -157,6 +157,7 @@ namespace pkd {
       const FrameState *fs = &self.frameStateBuffer[0];
       int pixel_index = pixelID.y * launchDim.x + pixelID.x;
       vec4f col(0.f);
+      vec4f norm(0.f,0.f,0.f,1.f);
       
       Random rnd(pixel_index,
                  //0// for debugging
@@ -170,8 +171,20 @@ namespace pkd {
         float v = float(pixelID.y + rnd());
         owl::Ray ray = Camera::generateRay(*fs, u, v, rnd);
         col += vec4f(traceRay(self,ray, rnd,prd),1);
+
+        //Normals
+        vec3f N(0.f);
+        if (prd.particleID != -1) {
+            const Particle particle = self.particleBuffer[prd.particleID];
+            N = vec3f((ray.origin + prd.t * ray.direction) - particle.pos);
+            if (dot(N, (vec3f)ray.direction) > 0.f)
+                N = -N;
+            N = normalize(N);
+        }
+        norm += vec4f(N, 0.f);
       }
       col = col / float(fs->samplesPerPixel);
+      norm = norm / float(fs->samplesPerPixel);
 
       uint64_t clock_end = clock64();
       if (fs->heatMapEnabled) {
@@ -186,12 +199,18 @@ namespace pkd {
         }
       }
     
-      if (fs->accumID > 0)
-        col = col + (vec4f)self.accumBufferPtr[pixelIdx];
+      if (fs->accumID > 0) {
+          col = col + (vec4f)self.accumBufferPtr[pixelIdx];
+          norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
+      }
+        
       self.accumBufferPtr[pixelIdx] = col;
+      self.normalAccumBufferPtr[pixelIdx] = norm;
 
-      uint32_t rgba = make_rgba8(col / (fs->accumID+1.f));
-      self.colorBufferPtr[pixelIdx] = rgba;
+      uint32_t rgba_col = make_rgba8(col / (fs->accumID+1.f));
+      uint32_t rgba_norm = make_rgba8(norm / (fs->accumID + 1.f));
+      self.colorBufferPtr[pixelIdx] = rgba_col;
+      self.normalBufferPtr[pixelIdx] = rgba_norm;
     }
   }
 }
