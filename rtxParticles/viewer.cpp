@@ -91,7 +91,7 @@ namespace pkd {
         typedef ViewerWidget inherited;
 
         OptixParticles& particles;
-        bool renderNormals;
+        int renderBuffer; //Buffer to render: 0=col, 1=norm, 2=depth
 
         ModelViewer(owl::viewer::GlutWindow::SP window,
             OptixParticles& particles)
@@ -99,7 +99,7 @@ namespace pkd {
             particles(particles)
         {
             frameState.samplesPerPixel = 1;
-            renderNormals = false;
+            renderBuffer = 0;
         }
 
         // /*! this function gets called whenever the viewer widget changes camera settings */
@@ -175,20 +175,34 @@ namespace pkd {
 
 
             uint32_t* fb;
-            if (!renderNormals)
-                fb = particles.mapColorBuffer();
-            else
+
+            switch (renderBuffer) {
+            case 1:
                 fb = particles.mapNormalBuffer();
+                break;
+            case 2:
+                fb = particles.mapDepthBuffer();
+                break;
+            default:
+                fb = particles.mapColorBuffer();
+                break;
+            }
 
             if (!fb) return;
 
             window->drawPixels(fb);
 
-            if(!renderNormals)
-                particles.unmapColorBuffer();
-            else
+            switch (renderBuffer) {
+            case 1:
                 particles.unmapNormalBuffer();
-
+                break;
+            case 2:
+                particles.unmapDepthBuffer();
+                break;
+            default:
+                particles.unmapColorBuffer();
+                break;
+            }
             
             window->swapBuffers();
 
@@ -264,7 +278,8 @@ namespace pkd {
                     << fc.upVector.z << std::endl;
             } break;
             case 'n': {
-                renderNormals ^= 1;
+                renderBuffer++;
+                renderBuffer = renderBuffer % 3;
             } break;
             case '!': {
                 screenShot();

@@ -70,6 +70,8 @@ namespace pkd {
           { "accumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData,accumBufferPtr)},
           { "normalBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalBufferPtr)},
           { "normalAccumBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalAccumBufferPtr)},
+          { "depthBuffer",      OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthBufferPtr)},
+          { "depthAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthAccumBufferPtr)},
           { "particleBuffer",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,particleBuffer)},
           { "frameStateBuffer",OWL_BUFPTR, OWL_OFFSETOF(RayGenData,frameStateBuffer)},
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
@@ -112,33 +114,51 @@ namespace pkd {
     void OptixParticles::resizeFrameBuffer(const vec2i& newSize)
     {
         fbSize = newSize;
+        //AccumBuffer
         if (!accumBuffer)
             accumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
         
         owlBufferResize(accumBuffer, fbSize.x * fbSize.y);
-        
         owlRayGenSetBuffer(rayGen, "accumBuffer", accumBuffer);
-        owlRayGenSet1i(rayGen, "deviceCount", owlGetDeviceCount(context));
-
+        
+        //ColorBuffer
         if (!colorBuffer)
             colorBuffer = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
         
         owlBufferResize(colorBuffer, fbSize.x * fbSize.y); 
         owlRayGenSetBuffer(rayGen, "colorBuffer", colorBuffer);
 
+        //NormalAccumBuffer
         if (!normalAccumBuffer)
             normalAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
 
         owlBufferResize(normalAccumBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "normalAccumBuffer", normalAccumBuffer);
 
+        //NormalBuffer
         if (!normalBuffer)
             normalBuffer = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
 
         owlBufferResize(normalBuffer, fbSize.x * fbSize.y);
-
-        owlRayGenSet2i(rayGen, "fbSize", fbSize.x, fbSize.y);
         owlRayGenSetBuffer(rayGen, "normalBuffer", normalBuffer);
+
+        //NormalAccumBuffer
+        if (!depthAccumBuffer)
+            depthAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT, fbSize.x * fbSize.y, nullptr);
+
+        owlBufferResize(depthAccumBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "depthAccumBuffer", depthAccumBuffer);
+
+        //DepthBuffer
+        if (!depthBuffer)
+            depthBuffer = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
+
+        owlBufferResize(depthBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "depthBuffer", depthBuffer);
+
+        owlRayGenSet1i(rayGen, "deviceCount", owlGetDeviceCount(context));
+        owlRayGenSet2i(rayGen, "fbSize", fbSize.x, fbSize.y);
+        
     }
 
     void OptixParticles::updateFrameState(device::FrameState& fs)
@@ -166,5 +186,16 @@ namespace pkd {
     void OptixParticles::unmapNormalBuffer()
     {
         assert(normalBuffer);
+    }
+
+    uint32_t* OptixParticles::mapDepthBuffer()
+    {
+        if (!depthBuffer) return nullptr;
+        return (uint32_t*)owlBufferGetPointer(depthBuffer, 0);
+    }
+
+    void OptixParticles::unmapDepthBuffer()
+    {
+        assert(depthBuffer);
     }
 }

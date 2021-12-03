@@ -158,6 +158,7 @@ namespace pkd {
       int pixel_index = pixelID.y * launchDim.x + pixelID.x;
       vec4f col(0.f);
       vec4f norm(0.f,0.f,0.f,1.f);
+      float depth = 99999999999.f;
       
       Random rnd(pixel_index,
                  //0// for debugging
@@ -182,6 +183,12 @@ namespace pkd {
             N = normalize(N);
         }
         norm += vec4f(N, 0.f);
+
+        //Depth
+        if (prd.particleID != -1 && (depth < 0 || depth > prd.t)) {
+            depth = prd.t;
+        }
+        //depth = min(prd.t, depth);
       }
       col = col / float(fs->samplesPerPixel);
       norm = norm / float(fs->samplesPerPixel);
@@ -202,15 +209,25 @@ namespace pkd {
       if (fs->accumID > 0) {
           col = col + (vec4f)self.accumBufferPtr[pixelIdx];
           norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
+
+          if (self.depthAccumBufferPtr[pixelIdx] > depth) {
+              self.depthAccumBufferPtr[pixelIdx] = depth;
+          }
+      }
+      else {
+          self.depthAccumBufferPtr[pixelIdx] = depth;
       }
         
       self.accumBufferPtr[pixelIdx] = col;
       self.normalAccumBufferPtr[pixelIdx] = norm;
 
       uint32_t rgba_col = make_rgba8(col / (fs->accumID+1.f));
-      uint32_t rgba_norm = make_rgba8(norm / (fs->accumID + 1.f));
+      uint32_t rgba_norm = make_rgba8(abs(norm) / (fs->accumID + 1.f));
       self.colorBufferPtr[pixelIdx] = rgba_col;
       self.normalBufferPtr[pixelIdx] = rgba_norm;
+      
+      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthAccumBufferPtr[pixelIdx]), 0.0f));
+
     }
   }
 }
