@@ -160,7 +160,7 @@ namespace pkd {
 
         //CoverageAccumBuffer
         if (!coverageAccumBuffer)
-            coverageAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT, fbSize.x * fbSize.y, nullptr);
+            coverageAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT2, fbSize.x * fbSize.y, nullptr);
 
         owlBufferResize(coverageAccumBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "coverageAccumBuffer", coverageAccumBuffer);

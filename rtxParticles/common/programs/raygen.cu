@@ -161,9 +161,7 @@ namespace pkd {
       float depth = 99999999999.f;
 
       //Coverage
-      float a = 0.2f;
-      float invCov = 1.0f;
-      bool particleHit = false;
+      int kSampled = 0;
       
       Random rnd(pixel_index,
                  //0// for debugging
@@ -197,8 +195,7 @@ namespace pkd {
 
         //Coverage
         if (prd.particleID != -1) {
-            particleHit = true;
-            invCov *= (1 - a/depth);
+            kSampled++;
         }
       }
       col = col / float(fs->samplesPerPixel);
@@ -218,21 +215,35 @@ namespace pkd {
       }
     
       if (fs->accumID > 0) {
-          col = col + (vec4f)self.accumBufferPtr[pixelIdx];
-          norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
+        col = col + (vec4f)self.accumBufferPtr[pixelIdx];
+        norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
 
-          if (self.depthAccumBufferPtr[pixelIdx] > depth) {
-              self.depthAccumBufferPtr[pixelIdx] = depth;
-          }
+        if (self.depthAccumBufferPtr[pixelIdx] > depth) {
+            self.depthAccumBufferPtr[pixelIdx] = depth;
+        }
+          
+        self.coverageAccumBufferPtr[pixelIdx].y += float(kSampled);
 
-          if (particleHit) {
-              self.coverageAccumBufferPtr[pixelIdx] *= invCov;
-          }
+        //accumulateConfidence(C, a, k)
+        float C = self.coverageAccumBufferPtr[pixelIdx].x;
+        float a = 0.2f;
+        int k = int(self.coverageAccumBufferPtr[pixelIdx].y);
+
+        int N = 100;
+
+        float M = 1.0 - (1.0 / float(N));
+
+        float Enk = (1.0 - pow(M, k)) / (1.0 - M);
+
+        
+
+        self.coverageAccumBufferPtr[pixelIdx].x = 1.0 - pow(1.0 - a, Enk);
+          
 
       }
       else {
           self.depthAccumBufferPtr[pixelIdx] = depth;
-          self.coverageAccumBufferPtr[pixelIdx] = 1.0f;
+          self.coverageAccumBufferPtr[pixelIdx] = vec2f(0.0, 0.0);
       }
         
       self.accumBufferPtr[pixelIdx] = col;
@@ -244,7 +255,7 @@ namespace pkd {
       self.normalBufferPtr[pixelIdx] = rgba_norm;
       
       self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthAccumBufferPtr[pixelIdx]), 0.0f));
-      self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.coverageAccumBufferPtr[pixelIdx]), 0.0f));
+      self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.coverageAccumBufferPtr[pixelIdx].x), 0.0f));
 
     }
   }
