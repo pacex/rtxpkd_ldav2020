@@ -72,6 +72,8 @@ namespace pkd {
           { "normalAccumBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalAccumBufferPtr)},
           { "depthBuffer",      OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthBufferPtr)},
           { "depthAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthAccumBufferPtr)},
+          { "coverageBuffer",      OWL_BUFPTR, OWL_OFFSETOF(RayGenData, coverageBufferPtr)},
+          { "coverageAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, coverageAccumBufferPtr)},
           { "particleBuffer",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,particleBuffer)},
           { "frameStateBuffer",OWL_BUFPTR, OWL_OFFSETOF(RayGenData,frameStateBuffer)},
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
@@ -142,7 +144,7 @@ namespace pkd {
         owlBufferResize(normalBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "normalBuffer", normalBuffer);
 
-        //NormalAccumBuffer
+        //DepthAccumBuffer
         if (!depthAccumBuffer)
             depthAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT, fbSize.x * fbSize.y, nullptr);
 
@@ -155,6 +157,20 @@ namespace pkd {
 
         owlBufferResize(depthBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "depthBuffer", depthBuffer);
+
+        //CoverageAccumBuffer
+        if (!coverageAccumBuffer)
+            coverageAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT, fbSize.x * fbSize.y, nullptr);
+
+        owlBufferResize(coverageAccumBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "coverageAccumBuffer", coverageAccumBuffer);
+
+        //CoverageBuffer
+        if (!coverageBuffer)
+            coverageBuffer = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
+
+        owlBufferResize(coverageBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "coverageBuffer", coverageBuffer);
 
         owlRayGenSet1i(rayGen, "deviceCount", owlGetDeviceCount(context));
         owlRayGenSet2i(rayGen, "fbSize", fbSize.x, fbSize.y);
@@ -197,5 +213,16 @@ namespace pkd {
     void OptixParticles::unmapDepthBuffer()
     {
         assert(depthBuffer);
+    }
+
+    uint32_t* OptixParticles::mapCoverageBuffer()
+    {
+        if (!coverageBuffer) return nullptr;
+        return (uint32_t*)owlBufferGetPointer(coverageBuffer, 0);
+    }
+
+    void OptixParticles::unmapCoverageBuffer()
+    {
+        assert(coverageBuffer);
     }
 }

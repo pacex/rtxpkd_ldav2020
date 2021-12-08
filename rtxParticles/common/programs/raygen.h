@@ -30,9 +30,11 @@ namespace pkd {
       uint32_t *colorBufferPtr;
       uint32_t *normalBufferPtr;
       uint32_t* depthBufferPtr;
+      uint32_t* coverageBufferPtr;
       float4   *accumBufferPtr;
       float4   *normalAccumBufferPtr;
       float* depthAccumBufferPtr;
+      float* coverageAccumBufferPtr;
       Particle *particleBuffer;
       FrameState *frameStateBuffer;
     };

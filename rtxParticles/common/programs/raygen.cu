@@ -159,6 +159,11 @@ namespace pkd {
       vec4f col(0.f);
       vec4f norm(0.f,0.f,0.f,1.f);
       float depth = 99999999999.f;
+
+      //Coverage
+      float a = 0.2f;
+      float invCov = 1.0f;
+      bool particleHit = false;
       
       Random rnd(pixel_index,
                  //0// for debugging
@@ -189,6 +194,12 @@ namespace pkd {
             depth = prd.t;
         }
         //depth = min(prd.t, depth);
+
+        //Coverage
+        if (prd.particleID != -1) {
+            particleHit = true;
+            invCov *= (1 - a/depth);
+        }
       }
       col = col / float(fs->samplesPerPixel);
       norm = norm / float(fs->samplesPerPixel);
@@ -213,9 +224,15 @@ namespace pkd {
           if (self.depthAccumBufferPtr[pixelIdx] > depth) {
               self.depthAccumBufferPtr[pixelIdx] = depth;
           }
+
+          if (particleHit) {
+              self.coverageAccumBufferPtr[pixelIdx] *= invCov;
+          }
+
       }
       else {
           self.depthAccumBufferPtr[pixelIdx] = depth;
+          self.coverageAccumBufferPtr[pixelIdx] = 1.0f;
       }
         
       self.accumBufferPtr[pixelIdx] = col;
@@ -227,6 +244,7 @@ namespace pkd {
       self.normalBufferPtr[pixelIdx] = rgba_norm;
       
       self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthAccumBufferPtr[pixelIdx]), 0.0f));
+      self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.coverageAccumBufferPtr[pixelIdx]), 0.0f));
 
     }
   }

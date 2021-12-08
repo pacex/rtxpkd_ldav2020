@@ -91,7 +91,7 @@ namespace pkd {
         typedef ViewerWidget inherited;
 
         OptixParticles& particles;
-        int renderBuffer; //Buffer to render: 0=col, 1=norm, 2=depth
+        int renderBuffer; //Buffer to render: 0=col, 1=norm, 2=depth, 3=coverage
 
         ModelViewer(owl::viewer::GlutWindow::SP window,
             OptixParticles& particles)
@@ -183,6 +183,9 @@ namespace pkd {
             case 2:
                 fb = particles.mapDepthBuffer();
                 break;
+            case 3:
+                fb = particles.mapCoverageBuffer();
+                break;
             default:
                 fb = particles.mapColorBuffer();
                 break;
@@ -198,6 +201,9 @@ namespace pkd {
                 break;
             case 2:
                 particles.unmapDepthBuffer();
+                break;
+            case 3:
+                particles.unmapCoverageBuffer();
                 break;
             default:
                 particles.unmapColorBuffer();
@@ -279,7 +285,7 @@ namespace pkd {
             } break;
             case 'n': {
                 renderBuffer++;
-                renderBuffer = renderBuffer % 3;
+                renderBuffer = renderBuffer % 4;
             } break;
             case '!': {
                 screenShot();

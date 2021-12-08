@@ -57,6 +57,9 @@ namespace pkd {
     uint32_t* mapDepthBuffer();
     void unmapDepthBuffer();
 
+    uint32_t* mapCoverageBuffer();
+    void unmapCoverageBuffer();
+
     void render();
     
     /*! size of current frame buffer */
@@ -68,9 +71,11 @@ namespace pkd {
     OWLBuffer colorBuffer = 0;
     OWLBuffer normalBuffer = 0;
     OWLBuffer depthBuffer = 0;
+    OWLBuffer coverageBuffer = 0;
     OWLBuffer accumBuffer = 0;
     OWLBuffer normalAccumBuffer = 0;
     OWLBuffer depthAccumBuffer = 0;
+    OWLBuffer coverageAccumBuffer = 0;
     OWLGroup  world = 0;
     OWLRayGen rayGen = 0;
     OWLBuffer particleBuffer = 0;
