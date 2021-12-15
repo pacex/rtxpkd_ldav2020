@@ -287,6 +287,11 @@ namespace pkd {
                 renderBuffer++;
                 renderBuffer = renderBuffer % 4;
             } break;
+            case 'o': {
+                frameState.orthoProjection ^= 1;
+                frameState.accumID = 0;
+                particles.updateFrameState(frameState);
+            } break;
             case '!': {
                 screenShot();
             } break;

@@ -173,7 +173,13 @@ namespace pkd {
       for (int s = 0; s < fs->samplesPerPixel; s++) {
         float u = float(pixelID.x + rnd());
         float v = float(pixelID.y + rnd());
-        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd);
+        owl::Ray ray;
+        if (fs->orthoProjection) {
+            ray = Camera::generateRayOrthographic(*fs, u, v, rnd);
+        }
+        else {
+            ray = Camera::generateRay(*fs, u, v, rnd);
+        }
         col += vec4f(traceRay(self,ray, rnd,prd),1);
 
         //Normals
@@ -191,7 +197,6 @@ namespace pkd {
         if (prd.particleID != -1 && (depth < 0 || depth > prd.t)) {
             depth = prd.t;
         }
-        //depth = min(prd.t, depth);
 
         //Coverage
         if (prd.particleID != -1) {
