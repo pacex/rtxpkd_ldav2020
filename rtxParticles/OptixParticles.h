@@ -43,6 +43,8 @@ namespace pkd {
     void setModel(Model::SP model, bool override_model = false);
 
     virtual void buildModel(Model::SP model, bool override_model = false) = 0;
+
+    void buildDensityField(Model::SP model, int n);
     
     void resizeFrameBuffer(const vec2i &newSize);
 
@@ -79,6 +81,8 @@ namespace pkd {
     OWLGroup  world = 0;
     OWLRayGen rayGen = 0;
     OWLBuffer particleBuffer = 0;
+    OWLBuffer densityBuffer = 0;
+    OWLBuffer densityContextBuffer = 0;
 
     static int rec_depth;
   };

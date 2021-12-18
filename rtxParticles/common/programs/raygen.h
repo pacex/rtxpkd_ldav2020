@@ -37,6 +37,8 @@ namespace pkd {
       float2* coverageAccumBufferPtr; //(C,k)
       Particle *particleBuffer;
       FrameState *frameStateBuffer;
+      vec3f* densityContextBuffer;
+      float* densityBuffer;
     };
     
   }

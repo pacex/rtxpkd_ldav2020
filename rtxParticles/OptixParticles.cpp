@@ -79,6 +79,8 @@ namespace pkd {
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
           { "world",           OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
           { "rec_depth",       OWL_INT,    OWL_OFFSETOF(RayGenData,rec_depth)},
+          { "densityBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityBuffer)},
+          { "densityContextBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityContextBuffer)},
           { /* sentinel to mark end of list */ }
         };
 
@@ -97,6 +99,8 @@ namespace pkd {
 
     void OptixParticles::setModel(Model::SP model, bool override_model)
     {
+        buildDensityField(model, 100);
+
         buildModel(model, override_model);
         owlRayGenSetGroup(rayGen, "world", world);
         owlRayGenSetBuffer(rayGen, "particleBuffer", particleBuffer);
@@ -106,6 +110,41 @@ namespace pkd {
         std::cout << "building pipeline" << std::endl;
         owlBuildPipeline(context);
         owlBuildSBT(context);
+    }
+
+    void OptixParticles::buildDensityField(Model::SP model, int n) {
+
+        box3f bounds = model->getBounds();
+        vec3f boundsSize = bounds.upper - bounds.lower;
+        vec3f cellSize = boundsSize / float(n);
+        float cellVolume = cellSize.x * cellSize.y * cellSize.z;
+
+        std::vector<vec3f> densityContext {
+            bounds.lower,
+            bounds.upper,
+            vec3f(float(n))
+        };
+
+        densityContextBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(densityContext[0]), densityContext.size(), densityContext.data());
+        owlRayGenSetBuffer(rayGen, "densityContextBuffer", densityContextBuffer);
+
+        std::vector<float> particleDensity(n * n * n, 0);
+
+        for (int i = 0; i < model->particles.size(); i++) {
+            Particle& p = model->particles[i];
+            vec3f relPos = p.pos - bounds.lower;
+            vec3i voxelPos = vec3i(int(floor(n * relPos.x / boundsSize.x)), int(floor(n * relPos.y / boundsSize.y)), int(floor(n * relPos.z / boundsSize.z)));
+            particleDensity[n * n * voxelPos.x + n * voxelPos.y + voxelPos.z] += 1.0f;
+        }
+        /*
+        for (int i = 0; i < particleDensity.size(); i++) {
+            particleDensity[i] /= cellVolume;
+        }*/
+
+        densityBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(particleDensity[0]), particleDensity.size(), particleDensity.data());
+        owlRayGenSetBuffer(rayGen, "densityBuffer", densityBuffer);
+
+
     }
 
     void OptixParticles::render()
