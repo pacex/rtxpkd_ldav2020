@@ -99,7 +99,7 @@ namespace pkd {
 
     void OptixParticles::setModel(Model::SP model, bool override_model)
     {
-        buildDensityField(model, 100);
+        buildDensityField(model, 64);
 
         buildModel(model, override_model);
         owlRayGenSetGroup(rayGen, "world", world);

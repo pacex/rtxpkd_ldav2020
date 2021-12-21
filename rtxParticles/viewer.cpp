@@ -113,6 +113,7 @@ namespace pkd {
             frameState.camera_screen_du = screen_du;
             frameState.camera_screen_dv = screen_dv;
             frameState.camera_screen_00 = camera.screen.lower_left;
+            frameState.camera_screen_center = camera.screen.lower_left + 0.5f * camera.screen.horizontal + 0.5f * camera.screen.vertical;
             frameState.camera_lens_center = camera.lens.center;
             frameState.camera_lens_du = camera.lens.du;
             frameState.camera_lens_dv = camera.lens.dv;

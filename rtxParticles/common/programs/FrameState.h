@@ -31,6 +31,7 @@ namespace pkd {
       vec3f camera_screen_du;
       vec3f camera_screen_dv;
       vec3f camera_screen_00;
+      vec3f camera_screen_center;
       vec3f camera_lens_center;
       vec3f camera_lens_du;
       vec3f camera_lens_dv;

@@ -42,45 +42,53 @@ namespace pkd {
                                              float s, float t,
                                              Random &rnd) 
       {
-        // const FrameState *fs = &frameStateBuffer[0];
-        // const vec3f rd = 0.f; //camera_lens_radius * random_in_unit_disk(rnd);
-        // const vec3f lens_offset = fs->camera_u * rd.x + fs->camera_v * rd.y;
-        const vec3f origin = fs.camera_lens_center;// + lens_offset;
-        const vec3f direction
-          = fs.camera_screen_00
-          + s * fs.camera_screen_du
-          + t * fs.camera_screen_dv
-          ;
+          if (!fs.orthoProjection) {
 
-        return owl::Ray(
-        // return optix::make_Ray(
-                               /* origin   : */ origin,
-                               /* direction: */ safe_normalize(direction),
-                               /* tmin     : */ 1e-6f,
-                               /* tmax     : */ 1e20f);//RT_DEFAULT_MAX);
+              /*
+              * PERSPECTIVE
+              */
+
+              // const FrameState *fs = &frameStateBuffer[0];
+                // const vec3f rd = 0.f; //camera_lens_radius * random_in_unit_disk(rnd);
+                // const vec3f lens_offset = fs->camera_u * rd.x + fs->camera_v * rd.y;
+              const vec3f origin = fs.camera_lens_center;// + lens_offset;
+              const vec3f direction
+                  = fs.camera_screen_00
+                  + s * fs.camera_screen_du
+                  + t * fs.camera_screen_dv
+                  ;
+
+              return owl::Ray(
+                  // return optix::make_Ray(
+                  /* origin   : */ origin,
+                  /* direction: */ safe_normalize(direction),
+                  /* tmin     : */ 1e-6f,
+                  /* tmax     : */ 1e20f);//RT_DEFAULT_MAX);
+        }
+
+          /*
+          * ORTHOGRAPHIC
+          */
+
+          // const FrameState *fs = &frameStateBuffer[0];
+          // const vec3f rd = 0.f; //camera_lens_radius * random_in_unit_disk(rnd);
+          // const vec3f lens_offset = fs->camera_u * rd.x + fs->camera_v * rd.y;
+          const vec3f screen_00_to_center = fs.camera_screen_center - fs.camera_screen_00;
+          const vec3f origin = fs.camera_lens_center + s * fs.camera_screen_du + t * fs.camera_screen_dv - screen_00_to_center;
+          const vec3f direction = fs.camera_screen_center;
+
+          return owl::Ray(
+              // return optix::make_Ray(
+              /* origin   : */ origin,
+              /* direction: */ safe_normalize(direction),
+              /* tmin     : */ 1e-6f,
+              /* tmax     : */ 1e20f);//RT_DEFAULT_MAX);
+        
       }
       // vec3f lens_center;
       // vec3f screen_00;
       // vec3f screen_du;
       // vec3f screen_dv;
-
-      static __device__ owl::Ray generateRayOrthographic(const FrameState &fs,
-                                             float s, float t,
-                                             Random &rnd) 
-      {
-        // const FrameState *fs = &frameStateBuffer[0];
-        // const vec3f rd = 0.f; //camera_lens_radius * random_in_unit_disk(rnd);
-        // const vec3f lens_offset = fs->camera_u * rd.x + fs->camera_v * rd.y;
-        const vec3f origin = fs.camera_lens_center + s * fs.camera_screen_du + t * fs.camera_screen_dv;
-        const vec3f direction = fs.camera_screen_00;
-
-        return owl::Ray(
-        // return optix::make_Ray(
-                               /* origin   : */ origin,
-                               /* direction: */ safe_normalize(direction),
-                               /* tmin     : */ 1e-6f,
-                               /* tmax     : */ 1e20f);//RT_DEFAULT_MAX);
-      }
 
     };
     
