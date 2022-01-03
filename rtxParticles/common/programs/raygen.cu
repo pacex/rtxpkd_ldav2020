@@ -44,6 +44,10 @@ namespace pkd {
           return a + t * (b - a);
       }
 
+      inline __device__ float fract(float a) {
+          return a - float(int(a));
+      }
+
       inline __device__ vec3f transferFunction(const float f)
       {
           const int NUM_POINTS = 7;
@@ -81,10 +85,13 @@ namespace pkd {
       }
 
       inline __device__ float getDensity(const RayGenData& self, vec3f pos) {
+
           vec3f lowerBound = self.densityContextBuffer[0];
           vec3f upperBound = self.densityContextBuffer[1];
           vec3f boundSize = upperBound - lowerBound;
           int n = int(self.densityContextBuffer[2].x);
+          float h = 1.0f / self.densityContextBuffer[2].x;
+
 
           vec3f relPos = pos - lowerBound;
           relPos.x /= boundSize.x;
@@ -92,9 +99,26 @@ namespace pkd {
           relPos.z /= boundSize.z;
           relPos *= n;
 
-          vec3i voxel = vec3i(int(relPos.x), int(relPos.y), int(relPos.z));
+          relPos -= vec3f(0.5f * h, 0.5f * h, 0.5f * h);
+          relPos.x = fmaxf(0.0f, relPos.x);
+          relPos.y = fmaxf(0.0f, relPos.y);
+          relPos.z = fmaxf(0.0f, relPos.z);
 
-          return float(self.densityBuffer[voxelIndex(self, voxel)]);
+          
+          float xInterp00 = mix(self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z)))],
+              self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x) + 1, int(relPos.y), int(relPos.z)))], fract(relPos.x));
+          float xInterp01 = mix(self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z) + 1))],
+              self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x) + 1, int(relPos.y), int(relPos.z) + 1))], fract(relPos.x));
+          float xInterp10 = mix(self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y) + 1, int(relPos.z)))],
+              self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x) + 1, int(relPos.y) + 1, int(relPos.z)))], fract(relPos.x));
+          float xInterp11 = mix(self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y) + 1, int(relPos.z) + 1))],
+              self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x) + 1, int(relPos.y) + 1, int(relPos.z) + 1))], fract(relPos.x));
+
+          float yxInterp0 = mix(xInterp00, xInterp10, fract(relPos.y));
+          float yxInterp1 = mix(xInterp01, xInterp11, fract(relPos.y));
+
+          return mix(yxInterp0, yxInterp1, fract(relPos.z));
+          
       }
 
       inline __device__ float integrateDensityHistogram(const RayGenData& self, owl::Ray& ray, float step) {
