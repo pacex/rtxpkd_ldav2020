@@ -71,9 +71,9 @@ namespace pkd {
           { "normalBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalBufferPtr)},
           { "normalAccumBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalAccumBufferPtr)},
           { "depthBuffer",      OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthBufferPtr)},
-          { "depthAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthAccumBufferPtr)},
+          { "depthConfidenceAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthConfidenceAccumBufferPtr)},
           { "coverageBuffer",      OWL_BUFPTR, OWL_OFFSETOF(RayGenData, coverageBufferPtr)},
-          { "coverageAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, coverageAccumBufferPtr)},
+          { "depthConfidenceCullBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthConfidenceCullBufferPtr)},
           { "particleBuffer",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,particleBuffer)},
           { "frameStateBuffer",OWL_BUFPTR, OWL_OFFSETOF(RayGenData,frameStateBuffer)},
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
@@ -136,10 +136,10 @@ namespace pkd {
             vec3i voxelPos = vec3i(int(floor(n * relPos.x / boundsSize.x)), int(floor(n * relPos.y / boundsSize.y)), int(floor(n * relPos.z / boundsSize.z)));
             particleDensity[n * n * voxelPos.x + n * voxelPos.y + voxelPos.z] += 1.0f;
         }
-        /*
+        
         for (int i = 0; i < particleDensity.size(); i++) {
             particleDensity[i] /= cellVolume;
-        }*/
+        }
 
         densityBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(particleDensity[0]), particleDensity.size(), particleDensity.data());
         owlRayGenSetBuffer(rayGen, "densityBuffer", densityBuffer);
@@ -184,11 +184,11 @@ namespace pkd {
         owlRayGenSetBuffer(rayGen, "normalBuffer", normalBuffer);
 
         //DepthAccumBuffer
-        if (!depthAccumBuffer)
-            depthAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT, fbSize.x * fbSize.y, nullptr);
+        if (!depthConfidenceAccumBuffer)
+            depthConfidenceAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT3, fbSize.x * fbSize.y, nullptr);
 
-        owlBufferResize(depthAccumBuffer, fbSize.x * fbSize.y);
-        owlRayGenSetBuffer(rayGen, "depthAccumBuffer", depthAccumBuffer);
+        owlBufferResize(depthConfidenceAccumBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "depthConfidenceAccumBuffer", depthConfidenceAccumBuffer);
 
         //DepthBuffer
         if (!depthBuffer)
@@ -198,11 +198,11 @@ namespace pkd {
         owlRayGenSetBuffer(rayGen, "depthBuffer", depthBuffer);
 
         //CoverageAccumBuffer
-        if (!coverageAccumBuffer)
-            coverageAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT2, fbSize.x * fbSize.y, nullptr);
+        if (!depthConfidenceCullBuffer)
+            depthConfidenceCullBuffer = owlDeviceBufferCreate(context, OWL_FLOAT3, fbSize.x * fbSize.y, nullptr);
 
-        owlBufferResize(coverageAccumBuffer, fbSize.x * fbSize.y);
-        owlRayGenSetBuffer(rayGen, "coverageAccumBuffer", coverageAccumBuffer);
+        owlBufferResize(depthConfidenceCullBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "depthConfidenceCullBuffer", depthConfidenceCullBuffer);
 
         //CoverageBuffer
         if (!coverageBuffer)

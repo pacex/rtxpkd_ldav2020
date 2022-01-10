@@ -76,8 +76,8 @@ namespace pkd {
     OWLBuffer coverageBuffer = 0;
     OWLBuffer accumBuffer = 0;
     OWLBuffer normalAccumBuffer = 0;
-    OWLBuffer depthAccumBuffer = 0;
-    OWLBuffer coverageAccumBuffer = 0;
+    OWLBuffer depthConfidenceAccumBuffer = 0;
+    OWLBuffer depthConfidenceCullBuffer = 0;
     OWLGroup  world = 0;
     OWLRayGen rayGen = 0;
     OWLBuffer particleBuffer = 0;

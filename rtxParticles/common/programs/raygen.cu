@@ -104,7 +104,7 @@ namespace pkd {
           relPos.y = fmaxf(0.0f, relPos.y);
           relPos.z = fmaxf(0.0f, relPos.z);
 
-          
+          //Trilinear Interpolation
           float xInterp00 = mix(self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z)))],
               self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x) + 1, int(relPos.y), int(relPos.z)))], fract(relPos.x));
           float xInterp01 = mix(self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z) + 1))],
@@ -121,9 +121,12 @@ namespace pkd {
           
       }
 
-      inline __device__ float integrateDensityHistogram(const RayGenData& self, owl::Ray& ray, float step) {
-          float t0;
-          float t1;
+      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray, const float& step, const float& d_min, const float& d_max) {
+
+          const FrameState* fs = &self.frameStateBuffer[0];
+
+          float t0 = d_min;
+          float t1 = d_max;
 
           box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
 
@@ -131,13 +134,40 @@ namespace pkd {
 
           if (clipToBounds(ray, bounds, t0, t1)) {
               for (float t = t0; t < t1; t += step) {
-                  sum += getDensity(self, ray.origin + t * ray.direction);
+                  sum += getDensity(self, ray.origin + t * ray.direction) * step * length(cross(fs->camera_screen_du, fs->camera_screen_dv));
               }
           }
           return sum;
       }
 
 #pragma endregion
+
+#pragma region Confidence
+      inline __device__ float accumulateConfidence(const float& N, const float& a, const int& k) {
+          /*
+          float C = self.depthConfidenceAccumBufferPtr[pixelIdx].y;
+          float a = 0.2f;
+          int k = int(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
+
+          float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f) * 10.0);
+          //integrateDensityHistogram yields values in wrong order of magnitude
+          */
+
+          float M = 1.0 - (1.0 / N);
+          float Enk = (1.0 - pow(M, k)) / (1.0 - M); //(5)
+
+          return 1.0 - pow(1.0 - a, Enk); //(7)
+      }
+
+      inline __device__ float acceptanceProbability(const float& d) {
+          return 1.0; //TODO calculate acceptance probability
+      }
+
+      inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
+          return integrateDensityHistogram(self, ray, 0.02f, d, 999999999.0f) * C; //(12)
+      }
+#pragma endregion
+
 
 #pragma region TraceRay
       inline __device__ vec3f traceRay(const RayGenData& self,
@@ -232,14 +262,18 @@ namespace pkd {
       uint64_t clock_begin = clock64();
       const FrameState *fs = &self.frameStateBuffer[0];
       int pixel_index = pixelID.y * launchDim.x + pixelID.x;
+
+      //Accumulate color and normal across multiple samples
       vec4f col(0.f);
       vec4f norm(0.f,0.f,0.f,1.f);
+
       float depth = 99999999999.f;
 
       Random rnd(pixel_index,
           //0// for debugging
           fs->accumID//for real accumulation
       );
+
 
       owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x), float(pixelID.y), rnd);
 
@@ -257,26 +291,57 @@ namespace pkd {
         col += vec4f(traceRay(self,ray, rnd,prd),1);
 
         //Normals
-        vec3f N(0.f);
+        vec3f Normal(0.f);
         if (prd.particleID != -1) {
             const Particle particle = self.particleBuffer[prd.particleID];
-            N = vec3f((ray.origin + prd.t * ray.direction) - particle.pos);
-            if (dot(N, (vec3f)ray.direction) > 0.f)
-                N = -N;
-            N = normalize(N);
+            Normal = vec3f((ray.origin + prd.t * ray.direction) - particle.pos);
+            if (dot(Normal, (vec3f)ray.direction) > 0.f)
+                Normal = -Normal;
+            Normal = normalize(Normal);
         }
-        norm += vec4f(N, 0.f);
+        norm += vec4f(Normal, 0.f);
 
-        //Depth
-        if (prd.particleID != -1 && (depth < 0 || depth > prd.t)) {
-            depth = prd.t;
-        }
+        //Depth Confidence
+        if (prd.particleID != -1 && fs->accumID > 0) {
+            float s_depth = prd.t;
+            float s_a = 0.2f; //Constant for now
 
-        //Coverage
-        if (prd.particleID != -1) {
-            kSampled++;
+            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 9999999.0f) * 10.0);
+            //integrateDensityHistogram yields values in wrong order of magnitude
+
+            if (s_depth <= self.depthConfidenceCullBufferPtr[pixelIdx].x) {
+                self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(N, s_a, int(self.depthConfidenceCullBufferPtr[pixelIdx].z));
+                self.depthConfidenceCullBufferPtr[pixelIdx].z += 1.0f;
+            }
+
+            if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
+                //Update Accum Buffer
+                float u = rnd();
+                if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x && u <= acceptanceProbability(s_depth)) {
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].x = s_depth;
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = s_a;
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].z = 1.0f;
+                }
+                else {
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = accumulateConfidence(N, s_a, int(self.depthConfidenceAccumBufferPtr[pixelIdx].z));
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].z += 1.0f;
+                }
+            }
+
+            if (occludedParticles(self, centerRay, self.depthConfidenceAccumBufferPtr[pixelIdx].x, self.depthConfidenceAccumBufferPtr[pixelIdx].y)
+                > occludedParticles(self, centerRay, self.depthConfidenceCullBufferPtr[pixelIdx].x, self.depthConfidenceCullBufferPtr[pixelIdx].y)) {
+                
+                self.depthConfidenceCullBufferPtr[pixelIdx] = self.depthConfidenceAccumBufferPtr[pixelIdx];
+            }
+
+
+
+
+
         }
       }
+
+      //Accumulate color and normal across multiple samples
       col = col / float(fs->samplesPerPixel);
       norm = norm / float(fs->samplesPerPixel);
       
@@ -299,34 +364,35 @@ namespace pkd {
         col = col + (vec4f)self.accumBufferPtr[pixelIdx];
         norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
 
-        if (self.depthAccumBufferPtr[pixelIdx] > depth) {
-            self.depthAccumBufferPtr[pixelIdx] = depth;
+        /*
+        if (self.depthConfidenceAccumBufferPtr[pixelIdx].x > depth) {
+            self.depthConfidenceAccumBufferPtr[pixelIdx].x = depth;
         }
           
-        self.coverageAccumBufferPtr[pixelIdx].y += float(kSampled);
+        self.depthConfidenceAccumBufferPtr[pixelIdx].z += float(kSampled);
 
         //accumulateConfidence(C, a, k)
-        float C = self.coverageAccumBufferPtr[pixelIdx].x;
+        float C = self.depthConfidenceAccumBufferPtr[pixelIdx].y;
         float a = 0.2f;
-        int k = int(self.coverageAccumBufferPtr[pixelIdx].y);
+        int k = int(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
+
+        float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f) * 10.0); 
+        //integrateDensityHistogram yields values in wrong order of magnitude
+
+        float M = 1.0 - (1.0 / N);
+        float Enk = (1.0 - pow(M, k)) / (1.0 - M); //(5)
 
         
-        int N = 100;
-        N = int(integrateDensityHistogram(self, centerRay, 0.02f));
 
-        float M = 1.0 - (1.0 / float(N));
-
-        float Enk = (1.0 - pow(M, k)) / (1.0 - M);
-
-        
-
-        self.coverageAccumBufferPtr[pixelIdx].x = 1.0 - pow(1.0 - a, Enk);
-          
+        self.depthConfidenceAccumBufferPtr[pixelIdx].y = 1.0 - pow(1.0 - a, Enk); //(7)
+        //self.coverageAccumBufferPtr[pixelIdx].x = integrateDensityHistogram(self, centerRay, 0.02f);
+          */
 
       }
       else {
-          self.depthAccumBufferPtr[pixelIdx] = depth;
-          self.coverageAccumBufferPtr[pixelIdx] = vec2f(0.0, 0.0);
+          //Reset Buffers
+          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(depth, 0.0, 0.0);
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(depth, 0.0, 0.0);
       }
         
       self.accumBufferPtr[pixelIdx] = col;
@@ -337,8 +403,8 @@ namespace pkd {
       self.colorBufferPtr[pixelIdx] = rgba_col;
       self.normalBufferPtr[pixelIdx] = rgba_norm;
       
-      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthAccumBufferPtr[pixelIdx]), 0.0f));
-      self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.coverageAccumBufferPtr[pixelIdx].x), 0.0f));
+      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].x), 0.0f));
+      self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y), 0.0f));
 
     }
   }
