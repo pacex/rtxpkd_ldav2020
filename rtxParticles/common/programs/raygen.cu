@@ -125,8 +125,8 @@ namespace pkd {
 
           const FrameState* fs = &self.frameStateBuffer[0];
 
-          float t0 = d_min;
-          float t1 = d_max;
+          float t0 = max(ray.tmin, d_min);
+          float t1 = min(ray.tmax, d_max);
 
           box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
 
@@ -153,14 +153,14 @@ namespace pkd {
           //integrateDensityHistogram yields values in wrong order of magnitude
           */
 
-          float M = 1.0 - (1.0 / N);
-          float Enk = (1.0 - pow(M, k)) / (1.0 - M); //(5)
+          float M = 1.0f - (1.0f / N);
+          float Enk = (1.0f - pow(M, k)) / (1.0f - M); //(5)
 
-          return 1.0 - pow(1.0 - a, Enk); //(7)
+          return 1.0f - pow(1.0f - a, Enk); //(7)
       }
 
       inline __device__ float acceptanceProbability(const float& d) {
-          return 1.0; //TODO calculate acceptance probability
+          return 1.0f; //TODO calculate acceptance probability
       }
 
       inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
@@ -267,15 +267,18 @@ namespace pkd {
       vec4f col(0.f);
       vec4f norm(0.f,0.f,0.f,1.f);
 
-      float depth = 99999999999.f;
-
       Random rnd(pixel_index,
           //0// for debugging
           fs->accumID//for real accumulation
       );
 
 
-      owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x), float(pixelID.y), rnd);
+      float confidentDepth = 1e20f;
+      if (self.depthConfidenceCullBufferPtr[pixelIdx].y >= 0.95f) {
+          confidentDepth = self.depthConfidenceCullBufferPtr[pixelIdx].x;
+      }
+
+      owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x), float(pixelID.y), rnd, 1e-6f, confidentDepth);
 
       //Coverage
       int kSampled = 0;
@@ -287,7 +290,7 @@ namespace pkd {
       for (int s = 0; s < fs->samplesPerPixel; s++) {
         float u = float(pixelID.x + rnd());
         float v = float(pixelID.y + rnd());
-        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd);
+        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd, 1e-6f, confidentDepth);
         col += vec4f(traceRay(self,ray, rnd,prd),1);
 
         //Normals
@@ -301,12 +304,12 @@ namespace pkd {
         }
         norm += vec4f(Normal, 0.f);
 
-        //Depth Confidence
+        //Depth Confidence Accumulation
         if (prd.particleID != -1 && fs->accumID > 0) {
             float s_depth = prd.t;
             float s_a = 0.2f; //Constant for now
 
-            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 9999999.0f) * 10.0);
+            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 1e20f) * 10.0);
             //integrateDensityHistogram yields values in wrong order of magnitude
 
             if (s_depth <= self.depthConfidenceCullBufferPtr[pixelIdx].x) {
@@ -390,9 +393,9 @@ namespace pkd {
 
       }
       else {
-          //Reset Buffers
-          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(depth, 0.0, 0.0);
-          self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(depth, 0.0, 0.0);
+          //Framestate changed -> reset buffers, restart accumulation
+          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 0.0);
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 0.0);
       }
         
       self.accumBufferPtr[pixelIdx] = col;
@@ -403,7 +406,7 @@ namespace pkd {
       self.colorBufferPtr[pixelIdx] = rgba_col;
       self.normalBufferPtr[pixelIdx] = rgba_norm;
       
-      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].x), 0.0f));
+      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].x * 0.5), 0.0f));
       self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y), 0.0f));
 
     }

@@ -40,7 +40,7 @@ namespace pkd {
     struct Camera {
       static __device__ owl::Ray generateRay(const FrameState &fs,
                                              float s, float t,
-                                             Random &rnd) 
+                                             Random &rnd, float tmin = 1e-6f /*Default TMIN*/, float tmax = 1e20f /*Default TMAX*/) 
       {
           if (!fs.orthoProjection) {
 
@@ -62,8 +62,8 @@ namespace pkd {
                   // return optix::make_Ray(
                   /* origin   : */ origin,
                   /* direction: */ safe_normalize(direction),
-                  /* tmin     : */ 1e-6f,
-                  /* tmax     : */ 1e20f);//RT_DEFAULT_MAX);
+                  /* tmin     : */ tmin,
+                  /* tmax     : */ tmax);
         }
 
           /*
