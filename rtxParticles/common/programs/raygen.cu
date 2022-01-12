@@ -274,7 +274,7 @@ namespace pkd {
 
 
       float confidentDepth = 1e20f;
-      if (self.depthConfidenceCullBufferPtr[pixelIdx].y >= 0.95f) {
+      if (fs->probabalisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= 0.8f /*C_occ*/) {
           confidentDepth = self.depthConfidenceCullBufferPtr[pixelIdx].x;
       }
 
@@ -305,7 +305,7 @@ namespace pkd {
         norm += vec4f(Normal, 0.f);
 
         //Depth Confidence Accumulation
-        if (prd.particleID != -1 && fs->accumID > 0) {
+        if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
             float s_depth = prd.t;
             float s_a = 0.2f; //Constant for now
 
@@ -336,11 +336,6 @@ namespace pkd {
                 
                 self.depthConfidenceCullBufferPtr[pixelIdx] = self.depthConfidenceAccumBufferPtr[pixelIdx];
             }
-
-
-
-
-
         }
       }
 

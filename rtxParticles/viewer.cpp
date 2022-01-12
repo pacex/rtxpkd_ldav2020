@@ -293,6 +293,12 @@ namespace pkd {
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
             } break;
+            case 'p': {
+                frameState.probabalisticCulling ^= 1;
+                frameState.accumID = 0;
+                particles.updateFrameState(frameState);
+                break;
+            }
             case '!': {
                 screenShot();
             } break;
