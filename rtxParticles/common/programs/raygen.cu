@@ -164,7 +164,7 @@ namespace pkd {
       }
 
       inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
-          return integrateDensityHistogram(self, ray, 0.02f, d, 999999999.0f) * C; //(12)
+          return integrateDensityHistogram(self, ray, 0.02f, d, 1e20f) * C; //(12)
       }
 #pragma endregion
 
@@ -309,8 +309,8 @@ namespace pkd {
             float s_depth = prd.t;
             float s_a = 0.2f; //Constant for now
 
-            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 1e20f) * 10.0);
-            //integrateDensityHistogram yields values in wrong order of magnitude
+            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 1e20f));
+            //integrateDensityHistogram yields values in wrong order of magnitude?
 
             if (s_depth <= self.depthConfidenceCullBufferPtr[pixelIdx].x) {
                 self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(N, s_a, int(self.depthConfidenceCullBufferPtr[pixelIdx].z));
@@ -319,7 +319,7 @@ namespace pkd {
 
             if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
                 //Update Accum Buffer
-                float u = rnd();
+                float u = 0.0f;
                 if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x && u <= acceptanceProbability(s_depth)) {
                     self.depthConfidenceAccumBufferPtr[pixelIdx].x = s_depth;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].y = s_a;
