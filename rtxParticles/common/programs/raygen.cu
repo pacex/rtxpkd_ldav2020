@@ -48,6 +48,10 @@ namespace pkd {
           return a - float(int(a));
       }
 
+      inline __device__ float logx(float a, float base) {
+          return log2f(a) / log2f(base);
+      }
+
       inline __device__ vec3f transferFunction(const float f)
       {
           const int NUM_POINTS = 7;
@@ -159,7 +163,30 @@ namespace pkd {
           return 1.0f - pow(1.0f - a, Enk); //(7)
       }
 
-      inline __device__ float acceptanceProbability(const float& d) {
+      inline __device__ float acceptanceProbability(const RayGenData& self, const owl::Ray& ray, const int& pixelIdx, const float& d_s, const float& a) {
+          
+          /* Equation (15) */
+          float B_d = integrateDensityHistogram(self, ray, 0.02f, self.depthConfidenceCullBufferPtr[pixelIdx].x, 1e20f);
+          float B_ds = integrateDensityHistogram(self, ray, 0.02f, d_s, 1e20f);
+          float n_ds = logx(1.0f - (B_d / B_ds) * self.depthConfidenceCullBufferPtr[pixelIdx].y, 1.0f - a);
+
+
+          float particleCount_dmin_ds = integrateDensityHistogram(self, ray, 0.02f, 1e-6f, d_s);
+
+          /* Equation (20) */
+          if (n_ds > 0.98f * particleCount_dmin_ds) {
+              return 0.0;
+          }
+
+          /* Equation (18) */
+          float M = 1.0f - (1.0f / particleCount_dmin_ds);
+
+          /* Equation (19) */
+          int k_ds = int(ceilf(logx(1.0f - (n_ds / particleCount_dmin_ds), M)));
+
+          /* Equation (21) */
+
+          
           return 1.0f; //TODO calculate acceptance probability
       }
 
@@ -320,7 +347,7 @@ namespace pkd {
             if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
                 //Update Accum Buffer
                 float u = 0.0f;
-                if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x && u <= acceptanceProbability(s_depth)) {
+                if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x/* && u <= acceptanceProbability(s_depth)*/) {
                     self.depthConfidenceAccumBufferPtr[pixelIdx].x = s_depth;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].y = s_a;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].z = 1.0f;
