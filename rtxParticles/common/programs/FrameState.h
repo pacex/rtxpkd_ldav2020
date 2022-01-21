@@ -42,8 +42,8 @@ namespace pkd {
       /*! num samples per pixel */
       int   samplesPerPixel { 1 };
 
-      bool orthoProjection { 0 };
-      bool probabalisticCulling { 1 };
+      bool orthoProjection { 1 };
+      bool probabalisticCulling { 0 };
       bool heatMapEnabled { 0 };
       float heatMapScale = 1.f;
       vec2i dbgPixel { 400,400};

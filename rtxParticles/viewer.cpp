@@ -547,7 +547,6 @@ namespace pkd {
         else
             throw std::runtime_error("unknown acceleration method '" + method + "'");
 
-
         optixRenderer->setModel(particles, ext == ".pkd");
 
         // if (dumpModel) {

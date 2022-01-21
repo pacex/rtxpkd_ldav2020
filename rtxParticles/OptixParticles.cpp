@@ -79,8 +79,10 @@ namespace pkd {
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
           { "world",           OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
           { "rec_depth",       OWL_INT,    OWL_OFFSETOF(RayGenData,rec_depth)},
+          { "radius",       OWL_FLOAT,    OWL_OFFSETOF(RayGenData,radius)},
           { "densityBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityBuffer)},
           { "densityContextBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityContextBuffer)},
+          { "normalCdfBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalCdfBuffer)},
           { /* sentinel to mark end of list */ }
         };
 
@@ -100,16 +102,38 @@ namespace pkd {
     void OptixParticles::setModel(Model::SP model, bool override_model)
     {
         buildDensityField(model, 64);
+        calculateNormalCdf();
 
         buildModel(model, override_model);
         owlRayGenSetGroup(rayGen, "world", world);
         owlRayGenSetBuffer(rayGen, "particleBuffer", particleBuffer);
+        owlRayGenSet1f(rayGen, "radius", model->radius);
 
         std::cout << "building programs" << std::endl;
         owlBuildPrograms(context);
         std::cout << "building pipeline" << std::endl;
         owlBuildPipeline(context);
         owlBuildSBT(context);
+    }
+
+    void OptixParticles::calculateNormalCdf() {
+        float z_alpha = 3.09f;
+        int n = 100;
+
+        float step = 2.0f * z_alpha / float(n);
+
+        std::vector<float> cdf(n + 2);
+
+        cdf[0] = z_alpha;
+        cdf[1] = float(n);
+
+        float x = -z_alpha;
+        for (int i = 0; i < n; i++) {
+            x += step;
+            cdf[i + 2] = 0.5f * erfcf(-x * M_SQRT1_2);
+        }
+        normalCdfBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(cdf[0]), cdf.size(), cdf.data());
+        owlRayGenSetBuffer(rayGen, "normalCdfBuffer", normalCdfBuffer);
     }
 
     void OptixParticles::buildDensityField(Model::SP model, int n) {

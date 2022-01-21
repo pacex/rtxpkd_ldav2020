@@ -27,6 +27,8 @@
 #include "rtxParticles/common/programs/intersectSphere.h"
 
 #include <thrust/device_vector.h>
+#include <math_constants.h>
+
 
 // #define COLOR_CODING 1
 
@@ -163,6 +165,16 @@ namespace pkd {
           return 1.0f - pow(1.0f - a, Enk); //(7)
       }
 
+      inline __device__ float normalCdf(const RayGenData& self, float x) {
+          float n = self.normalCdfBuffer[0];
+          float z_alpha = self.normalCdfBuffer[1];
+
+          if (x < -z_alpha) return 0.0f;
+          if (x > z_alpha) return 1.0f;
+
+          return self.normalCdfBuffer[int(((x + z_alpha) / (2.0f * z_alpha)) * n)];
+      }
+
       inline __device__ float acceptanceProbability(const RayGenData& self, const owl::Ray& ray, const int& pixelIdx, const float& d_s, const float& a) {
           
           /* Equation (15) */
@@ -184,10 +196,17 @@ namespace pkd {
           /* Equation (19) */
           int k_ds = int(ceilf(logx(1.0f - (n_ds / particleCount_dmin_ds), M)));
 
+          /* Equation (22) */
+          float p_ds = particleCount_dmin_ds / integrateDensityHistogram(self, ray, 0.02f, 1e-6f, 1e20f);
+          float q_ds = 1.0f - p_ds;
+
+          int N_budget = 100;
           /* Equation (21) */
+          float mean = float(N_budget) * p_ds;
+          float var = float(N_budget) * p_ds * q_ds;
 
           
-          return 1.0f; //TODO calculate acceptance probability
+          return 1.0f - normalCdf(self, (k_ds + 0.5f - mean) / var);
       }
 
       inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
@@ -263,6 +282,7 @@ namespace pkd {
       }
 #pragma endregion
 
+
     OPTIX_MISS_PROGRAM(miss_program)()
     // RT_PROGRAM void miss_program()
     {
@@ -334,7 +354,7 @@ namespace pkd {
         //Depth Confidence Accumulation
         if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
             float s_depth = prd.t;
-            float s_a = 0.2f; //Constant for now
+            float s_a = min((2.0f * CUDART_PI_F * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
 
             float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 1e20f));
             //integrateDensityHistogram yields values in wrong order of magnitude?
@@ -346,8 +366,8 @@ namespace pkd {
 
             if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
                 //Update Accum Buffer
-                float u = 0.0f;
-                if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x/* && u <= acceptanceProbability(s_depth)*/) {
+                float u = rnd();
+                if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x && u <= acceptanceProbability(self, ray, pixelIdx, s_depth, s_a)) {
                     self.depthConfidenceAccumBufferPtr[pixelIdx].x = s_depth;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].y = s_a;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].z = 1.0f;

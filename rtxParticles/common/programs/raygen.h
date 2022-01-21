@@ -26,6 +26,7 @@ namespace pkd {
       int deviceCount;
       OptixTraversableHandle world;
       int       rec_depth;
+      float     radius;
       vec2ui    fbSize;
       uint32_t *colorBufferPtr;
       uint32_t *normalBufferPtr;
@@ -39,6 +40,7 @@ namespace pkd {
       FrameState *frameStateBuffer;
       vec3f* densityContextBuffer;
       float* densityBuffer;
+      float* normalCdfBuffer;
     };
     
   }
