@@ -140,9 +140,10 @@ namespace pkd {
 
         box3f bounds = model->getBounds();
         vec3f boundsSize = bounds.upper - bounds.lower;
+        /*
         std::cout << "Bounds size:" << std::endl;
         printf("%6.4lf", length(boundsSize));
-        std::cout << std::endl;
+        std::cout << std::endl;*/
         vec3f cellSize = boundsSize / float(n);
         float cellVolume = cellSize.x * cellSize.y * cellSize.z;
 
@@ -164,11 +165,8 @@ namespace pkd {
             particleDensity[n * n * voxelPos.x + n * voxelPos.y + voxelPos.z] += 1.0f;
         }
         
-        std::cout << "Density values:" << std::endl;
         for (int i = 0; i < particleDensity.size(); i++) {
             particleDensity[i] /= cellVolume;
-            printf("%6.4lf", particleDensity[i]);
-            std::cout << std::endl;
         }
 
         densityBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(particleDensity[0]), particleDensity.size(), particleDensity.data());

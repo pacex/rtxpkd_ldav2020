@@ -127,23 +127,31 @@ namespace pkd {
           
       }
 
-      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray, const float& step_relative, const float& d_min, const float& d_max) {
-
-          const FrameState* fs = &self.frameStateBuffer[0];
+      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray, const float& d_min, const float& d_max, float step_relative = 0.2f) {
 
           float t0 = max(ray.tmin, d_min);
           float t1 = min(ray.tmax, d_max);
 
           box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
 
-          float step = step_relative * length(bounds.upper - bounds.lower);
-
           float sum = 0.0f;
+          
 
           if (clipToBounds(ray, bounds, t0, t1)) {
-              for (float t = t0 + 0.1f * step; t < t1; t += step) {
-                  sum += getDensity(self, ray.origin + t * ray.direction) * step * length(cross(fs->camera_screen_du, fs->camera_screen_dv));
+
+              const FrameState* fs = &self.frameStateBuffer[0];
+
+              float step = step_relative * length(bounds.upper - bounds.lower);
+              float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
+
+              float t_last = t0;
+              for (float t = t0; t < t1; t += step) {
+                  sum += getDensity(self, ray.origin + t * ray.direction);
+                  t_last = t;
               }
+              sum *= step * pixel_footprint;
+
+              sum += getDensity(self, ray.origin + t1 * ray.direction) * (t1 - t_last) * pixel_footprint;
           }
           return sum;
       }
@@ -152,15 +160,6 @@ namespace pkd {
 
 #pragma region Confidence
       inline __device__ float accumulateConfidence(const float& N, const float& a, const int& k) {
-          /*
-          float C = self.depthConfidenceAccumBufferPtr[pixelIdx].y;
-          float a = 0.2f;
-          int k = int(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
-
-          float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f) * 10.0);
-          //integrateDensityHistogram yields values in wrong order of magnitude
-          */
-
           float M = 1.0f - (1.0f / N);
           float Enk = (1.0f - pow(M, k)) / (1.0f - M); //(5)
 
@@ -180,12 +179,12 @@ namespace pkd {
       inline __device__ float acceptanceProbability(const RayGenData& self, const owl::Ray& ray, const int& pixelIdx, const float& d_s, const float& a) {
           
           /* Equation (15) */
-          float B_d = integrateDensityHistogram(self, ray, 0.02f, self.depthConfidenceCullBufferPtr[pixelIdx].x, 1e20f);
-          float B_ds = integrateDensityHistogram(self, ray, 0.02f, d_s, 1e20f);
+          float B_d = integrateDensityHistogram(self, ray, self.depthConfidenceCullBufferPtr[pixelIdx].x, 1e20f);
+          float B_ds = integrateDensityHistogram(self, ray, d_s, 1e20f);
           float n_ds = logx(1.0f - (B_d / B_ds) * self.depthConfidenceCullBufferPtr[pixelIdx].y, 1.0f - a);
 
 
-          float B_dmin_ds = integrateDensityHistogram(self, ray, 0.02f, 1e-6f, d_s);
+          float B_dmin_ds = integrateDensityHistogram(self, ray, 1e-6f, d_s);
 
           /* Equation (20) */
           if (n_ds > 0.98f * B_dmin_ds) {
@@ -212,7 +211,7 @@ namespace pkd {
       }
 
       inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
-          return integrateDensityHistogram(self, ray, 0.02f, d, 1e20f) * C; //(12)
+          return integrateDensityHistogram(self, ray, d, 1e20f) * C; //(12)
       }
 #pragma endregion
 
@@ -358,8 +357,7 @@ namespace pkd {
             float s_depth = prd.t;
             float s_a = min((2.0f * CUDART_PI_F * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
 
-            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f, 0.0f, 1e20f));
-            //integrateDensityHistogram yields values in wrong order of magnitude?
+            float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.0f, 1e20f));
 
             if (s_depth <= self.depthConfidenceCullBufferPtr[pixelIdx].x) {
                 self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(N, s_a, int(self.depthConfidenceCullBufferPtr[pixelIdx].z));
@@ -426,7 +424,7 @@ namespace pkd {
 
       //Debug
       //self.normalBufferPtr[pixelIdx] = rgba_norm;
-      self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.02f, 1e-6f, 1e20f)), 0.0f));
+      self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 1e-6f, 1e20f)), 0.0f));
       
       self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].x * 0.5), 0.0f));
       self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y), 0.0f));
