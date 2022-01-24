@@ -87,7 +87,7 @@ namespace pkd {
 
       inline __device__ int voxelIndex(const RayGenData& self, vec3i voxel) {
           int n = int(self.densityContextBuffer[2].x);
-          return n * n * voxel.x + n * voxel.y + voxel.z;
+          return n * n * max(min(voxel.x, n-1), 0) + n * max(min(voxel.y, n-1), 0) + max(min(voxel.z, n-1), 0);
       }
 
       inline __device__ float getDensity(const RayGenData& self, vec3f pos) {
@@ -127,7 +127,7 @@ namespace pkd {
           
       }
 
-      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray, const float& step, const float& d_min, const float& d_max) {
+      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray, const float& step_relative, const float& d_min, const float& d_max) {
 
           const FrameState* fs = &self.frameStateBuffer[0];
 
@@ -136,10 +136,12 @@ namespace pkd {
 
           box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
 
+          float step = step_relative * length(bounds.upper - bounds.lower);
+
           float sum = 0.0f;
 
           if (clipToBounds(ray, bounds, t0, t1)) {
-              for (float t = t0; t < t1; t += step) {
+              for (float t = t0 + 0.1f * step; t < t1; t += step) {
                   sum += getDensity(self, ray.origin + t * ray.direction) * step * length(cross(fs->camera_screen_du, fs->camera_screen_dv));
               }
           }
@@ -183,21 +185,21 @@ namespace pkd {
           float n_ds = logx(1.0f - (B_d / B_ds) * self.depthConfidenceCullBufferPtr[pixelIdx].y, 1.0f - a);
 
 
-          float particleCount_dmin_ds = integrateDensityHistogram(self, ray, 0.02f, 1e-6f, d_s);
+          float B_dmin_ds = integrateDensityHistogram(self, ray, 0.02f, 1e-6f, d_s);
 
           /* Equation (20) */
-          if (n_ds > 0.98f * particleCount_dmin_ds) {
+          if (n_ds > 0.98f * B_dmin_ds) {
               return 0.0;
           }
 
           /* Equation (18) */
-          float M = 1.0f - (1.0f / particleCount_dmin_ds);
+          float M = 1.0f - (1.0f / B_dmin_ds);
 
           /* Equation (19) */
-          int k_ds = int(ceilf(logx(1.0f - (n_ds / particleCount_dmin_ds), M)));
+          int k_ds = int(ceilf(logx(1.0f - (n_ds / B_ds), M)));
 
           /* Equation (22) */
-          float p_ds = particleCount_dmin_ds / integrateDensityHistogram(self, ray, 0.02f, 1e-6f, 1e20f);
+          float p_ds = B_dmin_ds / (B_dmin_ds + B_ds);
           float q_ds = 1.0f - p_ds;
 
           int N_budget = 100;
@@ -408,31 +410,6 @@ namespace pkd {
       if (fs->accumID > 0) {
         col = col + (vec4f)self.accumBufferPtr[pixelIdx];
         norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
-
-        /*
-        if (self.depthConfidenceAccumBufferPtr[pixelIdx].x > depth) {
-            self.depthConfidenceAccumBufferPtr[pixelIdx].x = depth;
-        }
-          
-        self.depthConfidenceAccumBufferPtr[pixelIdx].z += float(kSampled);
-
-        //accumulateConfidence(C, a, k)
-        float C = self.depthConfidenceAccumBufferPtr[pixelIdx].y;
-        float a = 0.2f;
-        int k = int(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
-
-        float N = max(1.0, integrateDensityHistogram(self, centerRay, 0.02f) * 10.0); 
-        //integrateDensityHistogram yields values in wrong order of magnitude
-
-        float M = 1.0 - (1.0 / N);
-        float Enk = (1.0 - pow(M, k)) / (1.0 - M); //(5)
-
-        
-
-        self.depthConfidenceAccumBufferPtr[pixelIdx].y = 1.0 - pow(1.0 - a, Enk); //(7)
-        //self.coverageAccumBufferPtr[pixelIdx].x = integrateDensityHistogram(self, centerRay, 0.02f);
-          */
-
       }
       else {
           //Framestate changed -> reset buffers, restart accumulation
@@ -446,7 +423,10 @@ namespace pkd {
       uint32_t rgba_col = make_rgba8(col / (fs->accumID+1.f));
       uint32_t rgba_norm = make_rgba8(abs(norm) / (fs->accumID + 1.f));
       self.colorBufferPtr[pixelIdx] = rgba_col;
-      self.normalBufferPtr[pixelIdx] = rgba_norm;
+
+      //Debug
+      //self.normalBufferPtr[pixelIdx] = rgba_norm;
+      self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.02f, 1e-6f, 1e20f)), 0.0f));
       
       self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].x * 0.5), 0.0f));
       self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y), 0.0f));
