@@ -81,8 +81,8 @@ namespace pkd {
               // return optix::make_Ray(
               /* origin   : */ origin,
               /* direction: */ safe_normalize(direction),
-              /* tmin     : */ 1e-6f,
-              /* tmax     : */ 1e20f);//RT_DEFAULT_MAX);
+              /* tmin     : */ tmin,
+              /* tmax     : */ tmax);
         
       }
       // vec3f lens_center;
