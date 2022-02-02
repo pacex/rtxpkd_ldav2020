@@ -365,6 +365,7 @@ namespace pkd {
 
         std::string sceneFileName = "";
         int spp = 1;
+        float c_occ = 0.95f;
 
         bool dumpModel = false;
 
@@ -499,6 +500,9 @@ namespace pkd {
             else if (arg == "--radius") {
                 radius = std::atof(argv[++i]);
             }
+            else if (arg == "--c_occ") {
+                c_occ = std::atof(argv[++i]);
+            }
             else
                 usage("unknown cmdline arg '" + arg + "'");
         }
@@ -559,6 +563,7 @@ namespace pkd {
                 "particlesViewer");
         ModelViewer widget(window, *optixRenderer);
         widget.frameState.samplesPerPixel = spp;
+        widget.frameState.c_occ = c_occ;
 
         box3f sceneBounds = particles->getBounds();
         widget.enableInspectMode();
