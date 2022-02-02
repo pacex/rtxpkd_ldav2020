@@ -322,14 +322,11 @@ namespace pkd {
 
       //Culling by using depth as t_max
       float confidentDepth = 1e20f;
-      if (fs->probabalisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= 0.95f /*C_occ*/) {
+      if (fs->probabalisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
           confidentDepth = self.depthConfidenceCullBufferPtr[pixelIdx].x;
       }
 
       owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f, rnd, 1e-6f, 1e20f);
-
-      //Coverage
-      int kSampled = 0;
       
       
 
