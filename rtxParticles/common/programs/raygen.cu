@@ -321,9 +321,8 @@ namespace pkd {
       );
 
       //Culling by using depth as t_max
-      float confidentDepth = 1e20f;
       if (fs->probabalisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
-          confidentDepth = self.depthConfidenceCullBufferPtr[pixelIdx].x;
+          self.depthConfidenceCullBufferPtr[pixelIdx].w = self.depthConfidenceCullBufferPtr[pixelIdx].x;
       }
 
       owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f, rnd, 1e-6f, 1e20f);
@@ -335,9 +334,8 @@ namespace pkd {
       for (int s = 0; s < fs->samplesPerPixel; s++) {
         float u = float(pixelID.x + rnd());
         float v = float(pixelID.y + rnd());
-        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd, 1e-6f, 1e20f);
-        owl::Ray rayCulled = Camera::generateRay(*fs, u, v, rnd, 1e-6f, confidentDepth + 4.0f * self.radius);
-        col += vec4f(traceRay(self, rayCulled, rnd,prd),1);
+        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd, 1e-6f, self.depthConfidenceCullBufferPtr[pixelIdx].w + 2.0f * self.radius);
+        col += vec4f(traceRay(self, ray, rnd,prd),1);
 
         //Normals
         vec3f Normal(0.f);
@@ -352,7 +350,7 @@ namespace pkd {
 
         //Depth Confidence Accumulation
         if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
-            float s_depth = prd.t;
+            float s_depth = length(self.particleBuffer[prd.particleID].pos - ray.origin);
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
             float s_a = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
@@ -371,9 +369,23 @@ namespace pkd {
             box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
             if (clipToBounds(ray, bounds, t0, t1)) {
                 float sum = 0.0f;
-                const float step_relative = 0.1f;
 
-                float step = step_relative * length(bounds.upper - bounds.lower);
+#pragma region Step size calculation
+                float step = 0.1f;
+                float absx = fabsf(ray.direction.x);
+                float absy = fabsf(ray.direction.y);
+                float absz = fabsf(ray.direction.z);
+
+                if (absx > absy && absx > absz) {
+                    step = ((bounds.upper.x - bounds.lower.x) / self.densityContextBuffer[2].x) / absx;
+                }
+                else if (absy > absx && absy > absz) {
+                    step = ((bounds.upper.y - bounds.lower.y) / self.densityContextBuffer[2].y) / absy;
+                }
+                else if (absz > absx && absz > absx) {
+                    step = ((bounds.upper.z - bounds.lower.z) / self.densityContextBuffer[2].z) / absz;
+                }
+#pragma endregion
                 float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
 
                 bool past_s_depth = false;
@@ -384,7 +396,7 @@ namespace pkd {
                 float d_accum_partCount = 0.0f;
 
                 float t_last = t0;
-                for (float t = t0; t < t1; t += step) {
+                for (float t = t0 + 0.5f * step; t < t1; t += step) {
                     if (!past_s_depth && t > s_depth) {
                         s_depth_partCount = sum * step * pixel_footprint
                             + getDensity(self, ray.origin + s_depth * ray.direction) * (t - s_depth) * pixel_footprint;
@@ -473,7 +485,7 @@ namespace pkd {
       else {
           //Framestate changed -> reset buffers, restart accumulation
           self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 0.0);
-          self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 0.0);
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec4f(1e20f, 0.0, 0.0, 1e20f);
       }
         
       self.accumBufferPtr[pixelIdx] = col;
@@ -491,7 +503,7 @@ namespace pkd {
       vec3f upperBound = self.densityContextBuffer[1];
       float boundSize = length(upperBound - lowerBound);
 
-      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(0.5f * self.depthConfidenceCullBufferPtr[pixelIdx].x / boundSize), 0.0f));
+      self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(0.5f * self.depthConfidenceCullBufferPtr[pixelIdx].w / boundSize), 0.0f));
       self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y), 0.0f));
 
     }

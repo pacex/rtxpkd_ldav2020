@@ -101,7 +101,7 @@ namespace pkd {
 
     void OptixParticles::setModel(Model::SP model, bool override_model)
     {
-        buildDensityField(model, 16);
+        buildDensityField(model, 64);
         calculateNormalCdf();
 
         buildModel(model, override_model);
@@ -227,7 +227,7 @@ namespace pkd {
 
         //CoverageAccumBuffer
         if (!depthConfidenceCullBuffer)
-            depthConfidenceCullBuffer = owlDeviceBufferCreate(context, OWL_FLOAT3, fbSize.x * fbSize.y, nullptr);
+            depthConfidenceCullBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
 
         owlBufferResize(depthConfidenceCullBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "depthConfidenceCullBuffer", depthConfidenceCullBuffer);
