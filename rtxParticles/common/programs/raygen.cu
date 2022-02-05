@@ -127,10 +127,81 @@ namespace pkd {
           
       }
 
-      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray, const float& d_min, const float& d_max, float step_relative = 0.1f) {
+      inline __device__ float integrateDensityHistogram(const RayGenData& self, const owl::Ray& ray,
+          const float d_sample, const float d_cull, const float d_accum,
+          float& B_d_min, float& B_d_sample, float& B_d_cull, float& B_d_accum) {
 
-          
+          B_d_min = 0.0f;
+          B_d_sample = 0.0f;
+          B_d_cull = 0.0f;
+          B_d_accum = 0.0f;
 
+          float t0, t1;
+          box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
+          if (clipToBounds(ray, bounds, t0, t1)) {
+              float sum = 0.0f;
+
+#pragma region Step size calculation
+              float step = 0.1f;
+              float absx = fabsf(ray.direction.x);
+              float absy = fabsf(ray.direction.y);
+              float absz = fabsf(ray.direction.z);
+
+              if (absx > absy && absx > absz) {
+                  step = ((bounds.upper.x - bounds.lower.x) / self.densityContextBuffer[2].x) / absx;
+              }
+              else if (absy > absx && absy > absz) {
+                  step = ((bounds.upper.y - bounds.lower.y) / self.densityContextBuffer[2].y) / absy;
+              }
+              else if (absz > absx && absz > absx) {
+                  step = ((bounds.upper.z - bounds.lower.z) / self.densityContextBuffer[2].z) / absz;
+              }
+#pragma endregion
+
+              const FrameState* fs = &self.frameStateBuffer[0];
+              float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
+
+              bool past_d_sample = false;
+              float d_sample_partCount = 0.0f;
+              bool past_d_cull = false;
+              float d_cull_partCount = 0.0f;
+              bool past_d_accum = false;
+              float d_accum_partCount = 0.0f;
+
+              float t_last = t0;
+              for (float t = t0 + 0.5f * step; t < t1; t += step) {
+                  if (!past_d_sample && t > d_sample) {
+                      d_sample_partCount = sum * step * pixel_footprint
+                          + getDensity(self, ray.origin + d_sample * ray.direction) * (t - d_sample) * pixel_footprint;
+                      past_d_sample = true;
+                  }
+
+                  if (!past_d_cull && t > d_cull) {
+                      d_cull_partCount = sum * step * pixel_footprint
+                          + getDensity(self, ray.origin + d_cull * ray.direction) * (t - d_cull) * pixel_footprint;
+                      past_d_cull = true;
+                  }
+
+                  if (!past_d_accum && t > d_accum) {
+                      d_accum_partCount = sum * step * pixel_footprint
+                          + getDensity(self, ray.origin + d_accum * ray.direction) * (t - d_accum) * pixel_footprint;
+                      past_d_accum = true;
+                  }
+
+                  sum += getDensity(self, ray.origin + t * ray.direction);
+                  t_last = t;
+              }
+              sum *= step * pixel_footprint;
+              sum += getDensity(self, ray.origin + t1 * ray.direction) * (t1 - t_last) * pixel_footprint;
+
+              B_d_min = sum;
+              B_d_sample = B_d_min - d_sample_partCount;
+              B_d_cull = B_d_min - d_cull_partCount;
+              B_d_accum = B_d_min - d_accum_partCount;
+          }
+          return B_d_min;
+#pragma region old    
+          /*
           box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
 
           float sum = 0.0f;
@@ -156,6 +227,8 @@ namespace pkd {
               sum += getDensity(self, ray.origin + t1 * ray.direction) * (t1 - t_last) * pixel_footprint;
           }
           return sum;
+          */
+#pragma endregion
       }
 
 #pragma endregion
@@ -209,10 +282,11 @@ namespace pkd {
           
           return 1.0f - normalCdf(self, (k_ds + 0.5f - mean) / var);
       }
-
+      /*
       inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
           return integrateDensityHistogram(self, ray, d, 1e20f) * C; //(12)
       }
+      */
 #pragma endregion
 
 
@@ -350,102 +424,40 @@ namespace pkd {
 
         //Depth Confidence Accumulation
         if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
-            float s_depth = length(self.particleBuffer[prd.particleID].pos - ray.origin);
+            float d_sample = length(self.particleBuffer[prd.particleID].pos - ray.origin);
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
-            float s_a = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
+            float a_sample = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
 
 
 
 
             //Density Histogram Integration
-            float B_dmin = 0.0f;
-            float B_s_depth = 0.0f;
-            float B_d_cull = 0.0f;
-            float B_d_accum = 0.0f;
+            float B_d_min, B_d_sample, B_d_cull, B_d_accum;
 
-#pragma region Density Histogram Integration
-            float t0, t1;
-            box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
-            if (clipToBounds(ray, bounds, t0, t1)) {
-                float sum = 0.0f;
+            B_d_min = integrateDensityHistogram(self, ray,
+                d_sample, d_cull, d_accum,
+                B_d_min, B_d_sample, B_d_cull, B_d_accum);
 
-#pragma region Step size calculation
-                float step = 0.1f;
-                float absx = fabsf(ray.direction.x);
-                float absy = fabsf(ray.direction.y);
-                float absz = fabsf(ray.direction.z);
 
-                if (absx > absy && absx > absz) {
-                    step = ((bounds.upper.x - bounds.lower.x) / self.densityContextBuffer[2].x) / absx;
-                }
-                else if (absy > absx && absy > absz) {
-                    step = ((bounds.upper.y - bounds.lower.y) / self.densityContextBuffer[2].y) / absy;
-                }
-                else if (absz > absx && absz > absx) {
-                    step = ((bounds.upper.z - bounds.lower.z) / self.densityContextBuffer[2].z) / absz;
-                }
-#pragma endregion
-                float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
+            float N = max(1.0, B_d_min);
 
-                bool past_s_depth = false;
-                float s_depth_partCount = 0.0f;
-                bool past_d_cull = false;
-                float d_cull_partCount = 0.0f;
-                bool past_d_accum = false;
-                float d_accum_partCount = 0.0f;
-
-                float t_last = t0;
-                for (float t = t0 + 0.5f * step; t < t1; t += step) {
-                    if (!past_s_depth && t > s_depth) {
-                        s_depth_partCount = sum * step * pixel_footprint
-                            + getDensity(self, ray.origin + s_depth * ray.direction) * (t - s_depth) * pixel_footprint;
-                        past_s_depth = true;
-                    }
-
-                    if (!past_d_cull && t > d_cull) {
-                        d_cull_partCount = sum * step * pixel_footprint
-                            + getDensity(self, ray.origin + d_cull * ray.direction) * (t - d_cull) * pixel_footprint;
-                        past_d_cull = true;
-                    }
-
-                    if (!past_d_accum && t > d_accum) {
-                        d_accum_partCount = sum * step * pixel_footprint
-                            + getDensity(self, ray.origin + d_accum * ray.direction) * (t - d_accum) * pixel_footprint;
-                        past_d_accum = true;
-                    }
-
-                    sum += getDensity(self, ray.origin + t * ray.direction);
-                    t_last = t;
-                }
-                sum *= step * pixel_footprint;
-                sum += getDensity(self, ray.origin + t1 * ray.direction) * (t1 - t_last) * pixel_footprint;
-
-                B_dmin = sum;
-                B_s_depth = B_dmin - s_depth_partCount;
-                B_d_cull = B_dmin - d_cull_partCount;
-                B_d_accum = B_dmin - d_accum_partCount;
-            }
-#pragma endregion
-
-            float N = max(1.0, B_dmin);
-
-            if (s_depth <= d_cull) {
-                self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(N, s_a, int(self.depthConfidenceCullBufferPtr[pixelIdx].z));
+            if (d_sample <= d_cull) {
+                self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(N, a_sample, int(self.depthConfidenceCullBufferPtr[pixelIdx].z));
                 self.depthConfidenceCullBufferPtr[pixelIdx].z += 1.0f;
             }
 
-            if (s_depth <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
+            if (d_sample <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
                 //Update Accum Buffer
                 float u = rnd();
-                if (s_depth <= d_accum
-                    && u <= acceptanceProbability(self, pixelIdx, B_d_accum, B_s_depth, B_dmin, s_a)) {
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].x = s_depth;
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = s_a;
+                if (d_sample <= d_accum
+                    && u <= acceptanceProbability(self, pixelIdx, B_d_accum, B_d_sample, B_d_min, a_sample)) {
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].x = d_sample;
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = a_sample;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].z = 1.0f;
                 }
                 else {
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = accumulateConfidence(N, s_a, int(self.depthConfidenceAccumBufferPtr[pixelIdx].z));
+                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = accumulateConfidence(N, a_sample, int(self.depthConfidenceAccumBufferPtr[pixelIdx].z));
                     self.depthConfidenceAccumBufferPtr[pixelIdx].z += 1.0f;
                 }
             }
@@ -497,7 +509,8 @@ namespace pkd {
 
       //Debug
       //self.normalBufferPtr[pixelIdx] = rgba_norm;
-      self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 1e-6f, 1e20f)), 0.0f));
+      float a, b, c, d;
+      self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.0f, 0.0f, 0.0f, a, b, c, d)), 0.0f));
       
       vec3f lowerBound = self.densityContextBuffer[0];
       vec3f upperBound = self.densityContextBuffer[1];
