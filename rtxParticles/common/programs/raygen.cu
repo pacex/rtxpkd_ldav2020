@@ -162,13 +162,57 @@ namespace pkd {
               float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
 
               bool past_d_sample = false;
-              float d_sample_partCount = 0.0f;
               bool past_d_cull = false;
-              float d_cull_partCount = 0.0f;
               bool past_d_accum = false;
-              float d_accum_partCount = 0.0f;
 
-              float t_last = t0;
+              float t_last = t1;
+              for (float t = t1 - 0.5 * step; t > t0; t -= step) {
+                  
+                  float localDensity = getDensity(self, ray.origin + t * ray.direction);
+
+
+                  if (t > d_sample) {
+                      B_d_sample += localDensity;
+                  }
+                  else if (!past_d_sample) {
+                      B_d_sample *= step * pixel_footprint;
+                      B_d_sample += getDensity(self, ray.origin + d_sample * ray.direction) * (t_last - d_sample) * pixel_footprint;
+                      past_d_sample = true;
+                  }
+
+                  if (t > d_cull) {
+                      B_d_cull += localDensity;
+                  }
+                  else if (!past_d_cull) {
+                      B_d_cull *= step * pixel_footprint;
+                      B_d_cull += getDensity(self, ray.origin + d_cull * ray.direction) * (t_last - d_cull) * pixel_footprint;
+                      past_d_cull = true;
+                  }
+
+                  if (t > d_accum) {
+                      B_d_accum += localDensity;
+                  }
+                  else if (!past_d_accum) {
+                      B_d_accum *= step * pixel_footprint;
+                      B_d_accum += getDensity(self, ray.origin + d_accum * ray.direction) * (t_last - d_accum) * pixel_footprint;
+                      past_d_accum = true;
+                  }
+
+                  B_d_min += localDensity;
+
+                  t_last = t + 0.5 * step;
+              }
+
+              B_d_min *= step * pixel_footprint;
+              if (!past_d_sample)
+                  B_d_sample = B_d_min;
+              if (!past_d_cull)
+                  B_d_cull = B_d_min;
+              if (!past_d_accum)
+                  B_d_accum = B_d_min;
+
+
+              /*
               for (float t = t0 + 0.5f * step; t < t1; t += step) {
                   if (!past_d_sample && t > d_sample) {
                       d_sample_partCount = sum * step * pixel_footprint
@@ -198,6 +242,7 @@ namespace pkd {
               B_d_sample = B_d_min - d_sample_partCount;
               B_d_cull = B_d_min - d_cull_partCount;
               B_d_accum = B_d_min - d_accum_partCount;
+              */
           }
           return B_d_min;
 #pragma region old    
@@ -241,53 +286,68 @@ namespace pkd {
           return 1.0f - pow(1.0f - a, Enk); //(7)
       }
 
+#pragma region Acceptance Probability
       inline __device__ float normalCdf(const RayGenData& self, float x) {
           float n = self.normalCdfBuffer[1];
           float z_alpha = self.normalCdfBuffer[0];
 
-          if (x < -z_alpha) return 0.0f;
-          if (x > z_alpha) return 1.0f;
+          if (x < -z_alpha) return 1.0f;
+          if (x > z_alpha) return 0.0f;
 
           return self.normalCdfBuffer[int(((x + z_alpha) / (2.0f * z_alpha)) * n) + 2];
       }
 
-      inline __device__ float acceptanceProbability(const RayGenData& self, const int& pixelIdx, const float& B_d, const float& B_ds, const float& B_dmin, const float& a) {
-          
+      inline __device__ int minUniqueParticles(const float B_d_accum, const float B_d_sample, const float C, const float a) {
           /* Equation (15) */
-          float n_ds = logx(1.0f - (B_d / B_ds) * self.depthConfidenceCullBufferPtr[pixelIdx].y, 1.0f - a);
+          return max(1, int(ceilf(logx(1.0f - (B_d_accum / B_d_sample) * C, 1.0f - a))));
+      }
+
+      inline __device__ int minSamples(const int n_ds, const float D_d_min_d_sample, const float M) {
+          /* Equation (19) */
+          return int(ceilf(logx(1.0f - (float(n_ds) / D_d_min_d_sample), M)));
+      }
+
+      inline __device__ float approximateBernoulliCdf(const RayGenData& self, const int N, const int k, const float p) {
+          float mean = float(N) * p;
+          float var = float(N) * p * (1.0f - p);
+
+          return normalCdf(self, (float(k) - 0.5f - mean) / var);
+      }
+
+      inline __device__ float acceptanceProbability(const RayGenData& self, const int& pixelIdx,
+          const float B_d_accum, const float B_d_sample, const float B_d_min, const float& a) {
+          
+          int n_ds = minUniqueParticles(B_d_accum, B_d_sample, self.depthConfidenceAccumBufferPtr[pixelIdx].y, a);
 
 
-          float B_dmin_ds = B_dmin - B_ds;
+          float D_d_min_d_sample = B_d_min - B_d_sample;
 
           /* Equation (20) */
-          if (n_ds > 0.98f * B_dmin_ds) {
+          if (n_ds > 0.98f * D_d_min_d_sample) {
               return 0.0;
           }
 
           /* Equation (18) */
-          float M = 1.0f - (1.0f / B_dmin_ds);
+          float M = 1.0f - (1.0f / D_d_min_d_sample);
 
           /* Equation (19) */
-          int k_ds = int(ceilf(logx(1.0f - (n_ds / B_ds), M)));
+          int k_ds = minSamples(n_ds, D_d_min_d_sample, M);
 
           /* Equation (22) */
-          float p_ds = B_dmin_ds / (B_dmin_ds + B_ds);
-          float q_ds = 1.0f - p_ds;
+          float p_ds = D_d_min_d_sample / B_d_min;
 
-          int N_budget = 50;
-          /* Equation (21) */
-          float mean = float(N_budget) * p_ds;
-          float var = float(N_budget) * p_ds * q_ds;
-
+          int N_budget = 25;
           
-          return 1.0f - normalCdf(self, (k_ds + 0.5f - mean) / var);
+          return approximateBernoulliCdf(self, N_budget, k_ds, p_ds);
       }
+#pragma endregion
       /*
       inline __device__ float occludedParticles(const RayGenData& self, const owl::Ray& ray, const float& d, const float& C) {
           return integrateDensityHistogram(self, ray, d, 1e20f) * C; //(12)
       }
       */
 #pragma endregion
+
 
 
 #pragma region TraceRay
@@ -385,6 +445,8 @@ namespace pkd {
       const FrameState *fs = &self.frameStateBuffer[0];
       int pixel_index = pixelID.y * launchDim.x + pixelID.x;
 
+      
+
       //Accumulate color and normal across multiple samples
       vec4f col(0.f);
       vec4f norm(0.f,0.f,0.f,1.f);
@@ -394,12 +456,27 @@ namespace pkd {
           fs->accumID//for real accumulation
       );
 
+      //DEBUG
+#pragma region DEBUG
+      if (pixelIdx == 0 && fs->accumID == 0) {/*
+          float a = approximateBernoulliCdf(self, 100, 80, 0.5f);
+          printf("%f\n", a);
+          a = approximateBernoulliCdf(self, 100, 50, 0.45f);
+          printf("%f\n", a);
+          a = approximateBernoulliCdf(self, 20, 18, 0.4f);
+          printf("%f\n", a);
+          a = approximateBernoulliCdf(self, 32, 42, 0.9f);
+          printf("%f\n", a);*/
+      }
+#pragma endregion
+
       //Culling by using depth as t_max
       if (fs->probabalisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
           self.depthConfidenceCullBufferPtr[pixelIdx].w = self.depthConfidenceCullBufferPtr[pixelIdx].x;
       }
 
-      owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f, rnd, 1e-6f, 1e20f);
+      owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f,
+          rnd, 1e-6f, self.depthConfidenceCullBufferPtr[pixelIdx].w + 2.0f * self.radius);
       
       
 
@@ -424,7 +501,7 @@ namespace pkd {
 
         //Depth Confidence Accumulation
         if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
-            float d_sample = length(self.particleBuffer[prd.particleID].pos - ray.origin);
+            float d_sample = prd.t;
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
             float a_sample = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
@@ -438,9 +515,19 @@ namespace pkd {
             B_d_min = integrateDensityHistogram(self, ray,
                 d_sample, d_cull, d_accum,
                 B_d_min, B_d_sample, B_d_cull, B_d_accum);
+            
+            
 
 
             float N = max(1.0, B_d_min);
+
+            float accProb = acceptanceProbability(self, pixelIdx, B_d_accum, B_d_sample, B_d_min, a_sample);
+
+            if (fs->debugOutput && pixelIdx == 364383) {
+                printf("\033[1;37m%i |\033[0;33m N= %f,\033[0;31m d_culled= %f,\033[0;36m d_sample= %f,\033[0;33m B_d_sample= %f,\033[0;36m d_cull= %f,\033[0;32m C_cull= %f,\033[0;33m B_d_cull= %f,\033[0;36m d_accum= %f,\033[0;32m C_accum= %f,\033[0;33m B_d_accum= %f,\033[0;34m accProb= %f\033[0m\n", 
+                    fs->accumID, N, self.depthConfidenceCullBufferPtr[pixelIdx].w, d_sample, B_d_sample, d_cull, 
+                    self.depthConfidenceCullBufferPtr[pixelIdx].y, B_d_cull, d_accum, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, accProb);
+            }
 
             if (d_sample <= d_cull) {
                 self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(N, a_sample, int(self.depthConfidenceCullBufferPtr[pixelIdx].z));
@@ -451,7 +538,7 @@ namespace pkd {
                 //Update Accum Buffer
                 float u = rnd();
                 if (d_sample <= d_accum
-                    && u <= acceptanceProbability(self, pixelIdx, B_d_accum, B_d_sample, B_d_min, a_sample)) {
+                    && u <= accProb) {
                     self.depthConfidenceAccumBufferPtr[pixelIdx].x = d_sample;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].y = a_sample;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].z = 1.0f;
@@ -496,8 +583,8 @@ namespace pkd {
       }
       else {
           //Framestate changed -> reset buffers, restart accumulation
-          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 0.0);
-          self.depthConfidenceCullBufferPtr[pixelIdx] = vec4f(1e20f, 0.0, 0.0, 1e20f);
+          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 1.0);
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec4f(1e20f, 0.0, 1.0, 1e20f);
       }
         
       self.accumBufferPtr[pixelIdx] = col;

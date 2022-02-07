@@ -120,6 +120,8 @@ namespace pkd {
         float z_alpha = 3.09f;
         int n = 100;
 
+        const float M_SQRT_2PI = sqrtf(2.0f * M_PI);
+
         float step = 2.0f * z_alpha / float(n);
 
         std::vector<float> cdf(n + 2);
@@ -130,7 +132,7 @@ namespace pkd {
         float x = -z_alpha;
         for (int i = 0; i < n; i++) {
             x += step;
-            cdf[i + 2] = 0.5f * erfcf(-x * M_SQRT1_2);
+            cdf[i + 2] = 0.5f * (1.0f + erff(-x * M_SQRT_2PI));
         }
         normalCdfBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(cdf[0]), cdf.size(), cdf.data());
         owlRayGenSetBuffer(rayGen, "normalCdfBuffer", normalCdfBuffer);

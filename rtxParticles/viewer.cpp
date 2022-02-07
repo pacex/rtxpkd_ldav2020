@@ -366,6 +366,7 @@ namespace pkd {
         std::string sceneFileName = "";
         int spp = 1;
         float c_occ = 0.95f;
+        bool debug = false;
 
         bool dumpModel = false;
 
@@ -503,6 +504,9 @@ namespace pkd {
             else if (arg == "--c_occ") {
                 c_occ = std::atof(argv[++i]);
             }
+            else if (arg == "--debug") {
+                debug = true;
+            }
             else
                 usage("unknown cmdline arg '" + arg + "'");
         }
@@ -564,6 +568,7 @@ namespace pkd {
         ModelViewer widget(window, *optixRenderer);
         widget.frameState.samplesPerPixel = spp;
         widget.frameState.c_occ = c_occ;
+        widget.frameState.debugOutput = debug;
 
         box3f sceneBounds = particles->getBounds();
         widget.enableInspectMode();
