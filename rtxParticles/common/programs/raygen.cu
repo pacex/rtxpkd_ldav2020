@@ -158,6 +158,53 @@ namespace pkd {
           return sum;
       }
 
+      inline __device__ float densityHistogramDepth(const RayGenData& self, const owl::Ray& ray, float particleCount) {
+
+
+
+          box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
+
+          float sum = 0.0f;
+
+          float t0, t1;
+          if (clipToBounds(ray, bounds, t0, t1)) {
+
+#pragma region Step size calculation
+              float step = 0.1f;
+              float absx = fabsf(ray.direction.x);
+              float absy = fabsf(ray.direction.y);
+              float absz = fabsf(ray.direction.z);
+
+              if (absx > absy && absx > absz) {
+                  step = ((bounds.upper.x - bounds.lower.x) / self.densityContextBuffer[2].x) / absx;
+              }
+              else if (absy > absx && absy > absz) {
+                  step = ((bounds.upper.y - bounds.lower.y) / self.densityContextBuffer[2].y) / absy;
+              }
+              else if (absz > absx && absz > absx) {
+                  step = ((bounds.upper.z - bounds.lower.z) / self.densityContextBuffer[2].z) / absz;
+              }
+#pragma endregion
+
+              const FrameState* fs = &self.frameStateBuffer[0];
+              float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
+
+              float t_last = t0;
+              for (float t = t0; t < t1; t += step) {
+
+                  float localDensity = getDensity(self, ray.origin + (t + 0.5f * step) * ray.direction);
+                  sum += localDensity;
+
+                  if (sum > particleCount) {
+                      return t + (1.0f - (sum - particleCount) / localDensity) * step;
+                  }
+
+                  t_last = t;
+              }
+          }
+          return t1;
+      }
+
 #pragma endregion
 
 #pragma region Confidence
@@ -320,19 +367,18 @@ namespace pkd {
           fs->accumID//for real accumulation
       );
 
-
-      //Coverage
-      float s_a = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
-      float C_occ = fs->c_occ;
-      float minUniqueParts = logx(1.0f - C_occ, 1.0f - s_a);
+      
       
       //Depth Culling
+      
       float confidentDepth = 1e20f;
+      /*
       float N = max(1.0f, self.depthConfidenceCullBufferPtr[pixelIdx].z);
       float M = 1.0f - (1.0f / N);
       float Enk = (1.0f - pow(M, self.depthConfidenceCullBufferPtr[pixelIdx].y)) / (1.0f - M);
+      */
 
-      if (fs->probabalisticCulling && Enk >= minUniqueParts) {
+      if (fs->probabalisticCulling) {
           confidentDepth = self.depthConfidenceCullBufferPtr[pixelIdx].x + self.radius;
       }
 
@@ -355,6 +401,7 @@ namespace pkd {
         }
         norm += vec4f(Normal, 0.f);
 
+        /*
         //Depth Confidence Accumulation
         if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
             float s_depth = length(self.particleBuffer[prd.particleID].pos - ray.origin);
@@ -367,7 +414,7 @@ namespace pkd {
             
             //Increment k
             self.depthConfidenceCullBufferPtr[pixelIdx].y += 1.0f;         
-        }
+        }*/
       }
 
       //Accumulate color and normal across multiple samples
@@ -397,9 +444,16 @@ namespace pkd {
           //Framestate changed -> reset buffers, restart accumulation
           self.depthConfidenceAccumBufferPtr[pixelIdx] = vec3f(1e20f, 0.0, 0.0);
 
-          owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f, rnd, 1e-6f, 1e20f);
-          float N = integrateDensityHistogram(self, centerRay, 1e-6f, 1e20f);
-          self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(1e20f, 0.0f, N);
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(1e20f, 0.0f, 0.0f);
+
+          if (fs->probabalisticCulling) {
+              float s_a = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
+              float minUniqueParts = logx(1.0f - fs->c_occ, 1.0f - s_a);
+
+              owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f, rnd, 1e-6f, 1e20f);
+              float d = densityHistogramDepth(self, centerRay, minUniqueParts);
+              self.depthConfidenceCullBufferPtr[pixelIdx] = vec3f(d, 0.0f, 0.0f);
+          }
       }
         
       self.accumBufferPtr[pixelIdx] = col;
@@ -418,7 +472,7 @@ namespace pkd {
       float boundSize = length(upperBound - lowerBound);
 
       self.depthBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(0.5f * self.depthConfidenceCullBufferPtr[pixelIdx].x / boundSize), 0.0f));
-      self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y / minUniqueParts), 0.0f));
+      //self.coverageBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(self.depthConfidenceCullBufferPtr[pixelIdx].y / minUniqueParts), 0.0f));
 
     }
   }
