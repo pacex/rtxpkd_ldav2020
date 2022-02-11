@@ -8,14 +8,17 @@
 
 import random
 import matplotlib.pyplot as plt
+import matplotlib.collections
 import numpy as np
+import math
+from sys import float_info
 
 # parameters
 dataset_offset = 1
 dataset_length = 25
 num_particles = 500
 num_rays = 1000
-radius = 0.1
+radius = 0.02
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
@@ -103,11 +106,17 @@ class particle:
             print(f"fraction_h {fraction_h}, fraction_v {fraction_v} -> gauss {gauss}")
             voxel_density[idx] += gauss
 
-    def intersect(self, ray_y: float):
+    def does_intersect(self, ray_y: float) -> bool:
+        # thank you parallel rays, I guess
+        return True if abs(ray_y - self.y) <= self.r else False
+
+    def intersect(self, ray_y: float) -> float:
         # particle = (z - self.z)^2 + (y - self.y)^2 = self.r^2
         # eye = (ray_y, 0)
         # ray = eye + (0, 1) * t
-        blah TODO
+        # t = -sqrt(-self.y^2 -ray_y^2 + 2 * (self.y * ray_y) + self.r^2) + self.z - 0
+        t = -math.sqrt(- self.y ** 2 - ray_y ** 2 + 2 * (self.y * ray_y) + self.r ** 2) + self.z
+        return t;
 
 
 # generate particles
@@ -115,6 +124,15 @@ for i in range(num_particles):
     z = random.random() * dataset_length + dataset_offset
     y = random.random() * voxel_length
     particles.append(particle(y, z, radius))
+
+patches = [plt.Circle((p.z, p.y), p.r) for p in particles]
+fig, ax = plt.subplots()
+coll = matplotlib.collections.PatchCollection(patches, facecolors='black')
+ax.add_collection(coll)
+ax.margins(0.01)
+plt.xlim(0, dataset_length + dataset_offset)
+plt.ylim(- (dataset_length + dataset_offset) / 2, (dataset_length + dataset_offset) / 2)
+plt.show()
 
 # generate rays
 for i in range(num_rays):
@@ -140,6 +158,32 @@ plt.title('Particle density splatted')
 plt.show()
 
 # now let us start raycasting?
+print(f"casting {num_rays} rays into {num_particles} particles...")
+rays_that_hit = 0
+hit_sequence = []
+for r in rays:
+    first = None
+    nearest = None
+    hit_depth = float_info.max
+    for p in particles:
+        if p.does_intersect(r):
+            t = p.intersect(r)
+            if first == None:
+                first = p
+                nearest = p
+            if hit_depth > t:
+                nearest = p
+                hit_depth = t
+    if first != None:
+        rays_that_hit += 1
+        hit_sequence.append(nearest)
+
+print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
+plt.plot([p.z for p in hit_sequence])
+plt.xlabel('ray #')
+plt.ylabel('nearest hit')
+plt.title('Depth sequence of nearest hits')
+plt.show()
 
 # what is the deepest depth we found with brute force? what would be the result? like hit/miss ratio i.e. saturation?
 
