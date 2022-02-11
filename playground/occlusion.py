@@ -205,7 +205,7 @@ useful_particles = list(set([p for p in hit_sequence]))
 print(f"but we only actually hit {len(useful_particles)} different particles.")
 
 # what is the dataset "front"
-render_dataset(useful_particles, "Debug Visualization: hit particles")
+render_dataset(useful_particles, "Debug Visualization: hit particles (normal raycasting)")
 
 # what kind of depths did we hit, and when?
 plt.figure()
@@ -213,7 +213,7 @@ plt.figure()
 plt.plot([d for d in hit_sequence_depth])
 plt.xlabel('ray #')
 plt.ylabel('nearest hit')
-plt.title('Depth sequence of nearest hits: normal raycasting')
+plt.title('Depth sequence of nearest hits (normal raycasting)')
 plt.show()
 
 # other approaches
