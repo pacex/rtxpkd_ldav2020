@@ -7,6 +7,7 @@
 # but that probably does not matter.
 
 import random
+import string
 import matplotlib.pyplot as plt
 import matplotlib.collections
 import numpy as np
@@ -73,7 +74,10 @@ class particle:
         self.voxel_center = int(dtv_center)
         self.voxel_min = max(0, int(dtv_min))
         self.voxel_max = min(num_voxels - 1, int(dtv_max))
-        print(f"particle at {depth} sits in voxel {self.voxel_center} and spans [{self.voxel_min},{self.voxel_max}]")
+        print(self.to_string())
+
+    def to_string(self) -> string:
+        return f"particle at ({self.z}, {self.y}), radius {self.r}, in voxel {self.voxel_center}{f' spanning [{self.voxel_min},{self.voxel_max}]' if self.voxel_min != self.voxel_max else ''}"
 
     def overlap(self, coord: float, start: float, end: float) -> float:
         new_start = max(coord - self.r, start)
@@ -125,13 +129,17 @@ for i in range(num_particles):
     y = random.random() * voxel_length
     particles.append(particle(y, z, radius))
 
-patches = [plt.Circle((p.z, p.y), p.r) for p in particles]
 fig, ax = plt.subplots()
-coll = matplotlib.collections.PatchCollection(patches, facecolors='black')
+circles = [plt.Circle((p.z, p.y), p.r) for p in particles]
+coll = matplotlib.collections.PatchCollection(circles, facecolors='black')
+ax.add_collection(coll)
+rects = [plt.Rectangle((i * voxel_length + dataset_offset, 0), voxel_length, voxel_length, fill=False) for i in range(num_voxels)]
+coll = matplotlib.collections.PatchCollection(rects, edgecolors='orange', facecolors='none')
 ax.add_collection(coll)
 ax.margins(0.01)
 plt.xlim(0, dataset_length + dataset_offset)
 plt.ylim(- (dataset_length + dataset_offset) / 2, (dataset_length + dataset_offset) / 2)
+plt.title("Debug Visualization")
 plt.show()
 
 # generate rays
@@ -161,9 +169,10 @@ plt.show()
 print(f"casting {num_rays} rays into {num_particles} particles...")
 rays_that_hit = 0
 hit_sequence = []
+hit_sequence_depth = []
 for r in rays:
-    first = None
-    nearest = None
+    first: particle = None
+    nearest: particle = None
     hit_depth = float_info.max
     for p in particles:
         if p.does_intersect(r):
@@ -177,9 +186,12 @@ for r in rays:
     if first != None:
         rays_that_hit += 1
         hit_sequence.append(nearest)
+        hit_sequence_depth.append(hit_depth)
+        print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
 
 print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
-plt.plot([p.z for p in hit_sequence])
+#plt.plot([p.z for p in hit_sequence])
+plt.plot([d for d in hit_sequence_depth])
 plt.xlabel('ray #')
 plt.ylabel('nearest hit')
 plt.title('Depth sequence of nearest hits')
