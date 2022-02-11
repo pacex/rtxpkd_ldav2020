@@ -1,10 +1,8 @@
 # occlusion.py
 
 # here, we consider the "tube" extruded from a single screen-space pixel and the particles that are contained within it.
-# (x,y) is irrelevant, particles only need a depth coordinate in eye space and a mapping to the voxel their center lives in.
-# for simplicity, we do not look at actual voxels, but assume the voxel traversal step is set such as to hit a different voxel each time,
-# so our voxels are basically something like a "Bresenham chain" of cells. This makes splatting incorrect for larger particles and oblique rays,
-# but that probably does not matter.
+# x is irrelevant, particles only need a y and depth coordinate in eye space and a mapping to the voxel their center lives in.
+# for simplicity, we do look at rays that are aligned with the voxels "chain", so we do not need actual raycasting
 
 import random
 import string
@@ -26,6 +24,10 @@ num_voxels = 16
 
 voxel_length = dataset_length / num_voxels
 
+# Accelerate splatting: Sample 1D gauss kernel, then integrate the samples.
+# Then we could find the splat contribution by just computing the overlap of the splat and the voxel
+# and looking that up in the pre-integrated array. Since it is symmetric, we do not even care
+# about the "direction" of the overlap. right?
 def gauss(x: float, sigma: float) -> float:
     mu = 0
     return (0.398942 * pow(2.71828, -(0.5 * (x - mu) * (x - mu)) / (sigma * sigma))) / sigma
@@ -38,7 +40,7 @@ for x in gauss_values:
     sum += x
     gauss_integral.append(sum)
 
-# let us normalize the gauss integral
+# normalize the gauss integral, later we scale it to the proper "radius"
 gauss_integral_normalized = [x / sum for x in gauss_integral]
 
 # plt.plot(gauss_values)
@@ -92,6 +94,8 @@ class particle:
         print(f"int_overlap {int_overlap}")
         return int_overlap
 
+    # along the lines of separable kernels, can we just compute the two 1D
+    # overlaps and then multiply the respective "portions" of the pre-integration?
     def splat(self, voxel_density):
         for idx in range(self.voxel_min, self.voxel_max + 1):
             print(f"splat: [{self.y}, {self.z}] rad {self.r}:")
@@ -129,18 +133,22 @@ for i in range(num_particles):
     y = random.random() * voxel_length
     particles.append(particle(y, z, radius))
 
-fig, ax = plt.subplots()
-circles = [plt.Circle((p.z, p.y), p.r) for p in particles]
-coll = matplotlib.collections.PatchCollection(circles, facecolors='black')
-ax.add_collection(coll)
-rects = [plt.Rectangle((i * voxel_length + dataset_offset, 0), voxel_length, voxel_length, fill=False) for i in range(num_voxels)]
-coll = matplotlib.collections.PatchCollection(rects, edgecolors='orange', facecolors='none')
-ax.add_collection(coll)
-ax.margins(0.01)
-plt.xlim(0, dataset_length + dataset_offset)
-plt.ylim(- (dataset_length + dataset_offset) / 2, (dataset_length + dataset_offset) / 2)
-plt.title("Debug Visualization")
-plt.show(block=False)
+# render the dataset, haha
+def render_dataset(parts, title):
+    fig, ax = plt.subplots()
+    circles = [plt.Circle((p.z, p.y), p.r) for p in parts]
+    coll = matplotlib.collections.PatchCollection(circles, facecolors='black')
+    ax.add_collection(coll)
+    rects = [plt.Rectangle((i * voxel_length + dataset_offset, 0), voxel_length, voxel_length, fill=False) for i in range(num_voxels)]
+    coll = matplotlib.collections.PatchCollection(rects, edgecolors='orange', facecolors='none')
+    ax.add_collection(coll)
+    ax.margins(0.01)
+    plt.xlim(0, dataset_length + dataset_offset)
+    plt.ylim(- (dataset_length + dataset_offset) / 2, (dataset_length + dataset_offset) / 2)
+    plt.title(title)
+    plt.show(block=False)
+
+render_dataset(particles, "Debug Visualization: whole data")
 
 # generate rays
 for i in range(num_rays):
@@ -160,6 +168,7 @@ voxel_density = [0 for v in range(num_voxels)]
 for p in particles:
     p.splat(voxel_density)
 
+# show splatting result
 plt.figure()
 plt.plot(voxel_density)
 plt.ylabel('Density')
@@ -167,7 +176,7 @@ plt.xlabel('Depth')
 plt.title('Particle density splatted')
 plt.show(block=False)
 
-# now let us start raycasting?
+# now let us start raycasting (vanilla)
 print(f"casting {num_rays} rays into {num_particles} particles...")
 rays_that_hit = 0
 hit_sequence = []
@@ -192,15 +201,19 @@ for r in rays:
         print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
 
 print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
+useful_particles = list(set([p for p in hit_sequence]))
+print(f"but we only actually hit {len(useful_particles)} different particles.")
 
+# what is the dataset "front"
+render_dataset(useful_particles, "Debug Visualization: hit particles")
+
+# what kind of depths did we hit, and when?
 plt.figure()
 #plt.plot([p.z for p in hit_sequence])
 plt.plot([d for d in hit_sequence_depth])
 plt.xlabel('ray #')
 plt.ylabel('nearest hit')
-plt.title('Depth sequence of nearest hits')
+plt.title('Depth sequence of nearest hits: normal raycasting')
 plt.show()
-
-# what is the deepest depth we found with brute force? what would be the result? like hit/miss ratio i.e. saturation?
 
 # other approaches
