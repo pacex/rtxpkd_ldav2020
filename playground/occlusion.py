@@ -140,30 +140,32 @@ ax.margins(0.01)
 plt.xlim(0, dataset_length + dataset_offset)
 plt.ylim(- (dataset_length + dataset_offset) / 2, (dataset_length + dataset_offset) / 2)
 plt.title("Debug Visualization")
-plt.show()
+plt.show(block=False)
 
 # generate rays
 for i in range(num_rays):
     rays.append(random.random() * voxel_length)
 
 # show center depth histogram
+plt.figure()
 #plt.hist([x.z for x in particles], density=False, bins = num_voxels)
 plt.hist([x.voxel_center for x in particles], density=False, bins = num_voxels)
 plt.ylabel('Population')
 plt.xlabel('Depth')
 plt.title('Particle center depth distribution')
-plt.show()
+plt.show(block=False)
 
 # splat the particles, to approximate Mohamed's approach
 voxel_density = [0 for v in range(num_voxels)]
 for p in particles:
     p.splat(voxel_density)
 
+plt.figure()
 plt.plot(voxel_density)
 plt.ylabel('Density')
 plt.xlabel('Depth')
 plt.title('Particle density splatted')
-plt.show()
+plt.show(block=False)
 
 # now let us start raycasting?
 print(f"casting {num_rays} rays into {num_particles} particles...")
@@ -190,6 +192,8 @@ for r in rays:
         print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
 
 print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
+
+plt.figure()
 #plt.plot([p.z for p in hit_sequence])
 plt.plot([d for d in hit_sequence_depth])
 plt.xlabel('ray #')
