@@ -592,7 +592,7 @@ namespace pkd {
 
       if (fs->probabilisticCulling && fs->debugOutput && pixelIdx == 364383) {
           vec4f c = col / (fs->accumID + 1.f);
-          printf("(%f; %f; %f)\n", c.x, c.y, c.z);
+          printf("(%f)\n", (c.x + c.y + c.z) / 3.0f);
       }
 
       uint32_t rgba_col = make_rgba8(col / (fs->accumID + 1.f));
