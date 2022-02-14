@@ -291,15 +291,19 @@ namespace pkd {
           float n = self.normalCdfBuffer[1];
           float z_alpha = self.normalCdfBuffer[0];
 
-          if (x < -z_alpha) return 1.0f;
-          if (x > z_alpha) return 0.0f;
+          if (x < -z_alpha) return 0.0f;
+          if (x > z_alpha) return 1.0f;
 
           return self.normalCdfBuffer[int(((x + z_alpha) / (2.0f * z_alpha)) * n) + 2];
       }
 
       inline __device__ int minUniqueParticles(const float B_d_accum, const float B_d_sample, const float C, const float a) {
           /* Equation (15) */
-          return max(1, int(ceilf(logx(1.0f - (B_d_accum / B_d_sample) * C, 1.0f - a))));
+          float n = logx(1.0f - (B_d_accum / B_d_sample) * C, 1.0f - a);
+          if (fract(n) > 0.0f) {
+              return int(ceil(n));
+          }
+          return int(n) + 1;
       }
 
       inline __device__ int minSamples(const int n_ds, const float D_d_min_d_sample, const float M) {
@@ -311,7 +315,7 @@ namespace pkd {
           float mean = float(N) * p;
           float var = float(N) * p * (1.0f - p);
 
-          return normalCdf(self, (float(k) - 0.5f - mean) / var);
+          return 1.0f - normalCdf(self, (float(k) - 0.5f - mean) / sqrt(var));
       }
 
       inline __device__ float acceptanceProbability(const RayGenData& self, const int& pixelIdx,
@@ -458,15 +462,13 @@ namespace pkd {
 
       //DEBUG
 #pragma region DEBUG
-      if (pixelIdx == 0 && fs->accumID == 0) {/*
-          float a = approximateBernoulliCdf(self, 100, 80, 0.5f);
-          printf("%f\n", a);
-          a = approximateBernoulliCdf(self, 100, 50, 0.45f);
-          printf("%f\n", a);
-          a = approximateBernoulliCdf(self, 20, 18, 0.4f);
-          printf("%f\n", a);
-          a = approximateBernoulliCdf(self, 32, 42, 0.9f);
-          printf("%f\n", a);*/
+      if (pixelIdx == 0 && fs->accumID == 0) {
+          /*
+          for (int i = 0; i <= 52; i++) {
+              float P = approximateBernoulliCdf(self, 52, i, 0.42f);
+
+              printf("%i | %f\n", i, P);
+          }*/
       }
 #pragma endregion
 
@@ -476,7 +478,7 @@ namespace pkd {
       }
 
       owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f,
-          rnd, 1e-6f, self.depthConfidenceCullBufferPtr[pixelIdx].w + 2.0f * self.radius);
+          rnd, 1e-6f, self.depthConfidenceCullBufferPtr[pixelIdx].w);
       
       
 
@@ -512,7 +514,7 @@ namespace pkd {
             //Density Histogram Integration
             float B_d_min, B_d_sample, B_d_cull, B_d_accum;
 
-            B_d_min = integrateDensityHistogram(self, ray,
+            B_d_min = integrateDensityHistogram(self, centerRay,
                 d_sample, d_cull, d_accum,
                 B_d_min, B_d_sample, B_d_cull, B_d_accum);
             
