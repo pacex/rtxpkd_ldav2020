@@ -471,7 +471,7 @@ namespace pkd {
 #pragma endregion
 
       //Culling by using depth as t_max
-      if (fs->probabalisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
+      if (fs->probabilisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
           self.depthConfidenceCullBufferPtr[pixelIdx].w = self.depthConfidenceCullBufferPtr[pixelIdx].x;
       }
 
@@ -500,7 +500,7 @@ namespace pkd {
         norm += vec4f(Normal, 0.f);
 
         //Depth Confidence Accumulation
-        if (fs->probabalisticCulling && prd.particleID != -1 && fs->accumID > 0) {
+        if (fs->probabilisticCulling && prd.particleID != -1 && fs->accumID > 0) {
             float d_sample = prd.t;
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
@@ -589,6 +589,11 @@ namespace pkd {
         
       self.accumBufferPtr[pixelIdx] = col;
       self.normalAccumBufferPtr[pixelIdx] = norm;
+
+      if (fs->probabilisticCulling && fs->debugOutput && pixelIdx == 364383) {
+          vec4f c = col / (fs->accumID + 1.f);
+          printf("(%f; %f; %f)\n", c.x, c.y, c.z);
+      }
 
       uint32_t rgba_col = make_rgba8(col / (fs->accumID + 1.f));
       uint32_t rgba_norm = make_rgba8(abs(norm) / (fs->accumID + 1.f));

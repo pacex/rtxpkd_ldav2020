@@ -43,7 +43,7 @@ namespace pkd {
       int   samplesPerPixel { 1 };
 
       bool orthoProjection { 1 };
-      bool probabalisticCulling { 0 };
+      bool probabilisticCulling { 0 };
       bool debugOutput{ 0 };
       float c_occ = 0.95f;
       bool heatMapEnabled { 0 };
