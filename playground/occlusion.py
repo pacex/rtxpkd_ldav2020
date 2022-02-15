@@ -21,6 +21,7 @@ radius = 0.02
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
+use_probabilistic_culling = True
 
 voxel_length = dataset_length / num_voxels
 
@@ -150,6 +151,27 @@ def render_dataset(parts, title):
 
 render_dataset(particles, "Debug Visualization: whole data")
 
+
+# functions needed for probabilistic culling
+
+def particle_count_behind_depth(d1: float, d2: float):
+    # This is the D(d1,d2) function from Mohamed's paper, i.e. how many particles do we estimate to be behind depth d?
+    # A lot of stuff cancels out here:
+
+    psum = 0.0
+
+    # TODO: interpolation in first voxel
+
+    for i in range(min(math.floor(depth_to_voxel(d1)), num_voxels) + 1, min(math.floor(depth_to_voxel(d2)), num_voxels)):
+        psum += voxel_density[i]
+
+    # TODO: interpolation in last voxel
+
+
+    return psum
+
+
+
 # generate rays
 for i in range(num_rays):
     rays.append(random.random() * voxel_length)
@@ -176,33 +198,93 @@ plt.xlabel('Depth')
 plt.title('Particle density splatted')
 plt.show(block=False)
 
-# now let us start raycasting (vanilla)
-print(f"casting {num_rays} rays into {num_particles} particles...")
-rays_that_hit = 0
-hit_sequence = []
-hit_sequence_depth = []
-for r in rays:
-    first: particle = None
-    nearest: particle = None
-    hit_depth = float_info.max
-    for p in particles:
-        if p.does_intersect(r):
-            t = p.intersect(r)
-            if first == None:
-                first = p
-                nearest = p
-            if hit_depth > t:
-                nearest = p
-                hit_depth = t
-    if first != None:
-        rays_that_hit += 1
-        hit_sequence.append(nearest)
-        hit_sequence_depth.append(hit_depth)
-        print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+voxel_density_integrated = [particle_count_behind_depth(voxel_start(v), float_info.max) for v in range(num_voxels)]
+plt.figure()
+plt.plot(voxel_density_integrated)
+plt.ylabel('Density')
+plt.xlabel('Depth')
+plt.title('Particle density integrated behind depth')
+plt.show(block=False)
 
-print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
-useful_particles = list(set([p for p in hit_sequence]))
-print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
+
+# =============================
+#     RAY CASTING (VANILLA)
+# =============================
+if not use_probabilistic_culling:
+    print(f"casting {num_rays} rays into {num_particles} particles (vanilla)...")
+    rays_that_hit = 0
+    hit_sequence = []
+    hit_sequence_depth = []
+    for r in rays:
+        first: particle = None
+        nearest: particle = None
+        hit_depth = float_info.max
+        for p in particles:
+            if p.does_intersect(r):
+                t = p.intersect(r)
+                if first == None:
+                    first = p
+                    nearest = p
+                if hit_depth > t:
+                    nearest = p
+                    hit_depth = t
+        if first != None:
+            rays_that_hit += 1
+            hit_sequence.append(nearest)
+            hit_sequence_depth.append(hit_depth)
+            print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+    print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
+    useful_particles = list(set([p for p in hit_sequence]))
+    print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
+
+# ===========================================
+#     RAY CASTING (PROBABILISTIC CULLING)
+# ===========================================
+else:
+    print(f"casting {num_rays} rays into {num_particles} particles (using probabilistic culling)...")
+    rays_that_hit = 0
+    hit_sequence = []
+    hit_sequence_depth = []
+
+    t_max = float_info.max  # t_max of rays cast
+    t_cull = float_info.max  # to keep names uniform, we call d_cull t_cull in this prototype
+    C_cull = 0.0
+    t_accum = float_info.max
+    C_accum = 0.0
+
+
+    for r in rays:
+        first: particle = None
+        nearest: particle = None
+        hit_depth = float_info.max
+
+
+
+        for p in particles:
+            if p.does_intersect(r):
+                t = p.intersect(r)
+                if t > t_max:
+                    continue  # clip ray at t_max
+
+                if first == None:
+                    first = p
+                    nearest = p
+                if hit_depth > t:
+                    nearest = p
+                    hit_depth = t
+        if first != None:
+            rays_that_hit += 1
+            hit_sequence.append(nearest)
+            hit_sequence_depth.append(hit_depth)
+            print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+    print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
+    useful_particles = list(set([p for p in hit_sequence]))
+    print(
+        f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
+
+
+
+
 
 # what is the dataset "front"
 render_dataset(useful_particles, "Debug Visualization: hit particles (normal raycasting)")
