@@ -202,7 +202,7 @@ for r in rays:
 
 print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
 useful_particles = list(set([p for p in hit_sequence]))
-print(f"but we only actually hit {len(useful_particles)} different particles.")
+print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
 
 # what is the dataset "front"
 render_dataset(useful_particles, "Debug Visualization: hit particles (normal raycasting)")
