@@ -205,34 +205,34 @@ def particle_count_behind_depth(d1: float, d2: float):
     # handle first voxel v1:
     # sample it at d1 (linear interp with either v1-1 or v1+1)
     # and weight sample with v1_fract, i.e. how much of the voxel actually falls within the pixel tube
-    v1_fract = max(0.0, min(1.0, (voxel_end(v1) - d1) / voxel_length))
-    if v1_fract < 0.5:
+    #v1_fract = max(0.0, min(1.0, (voxel_end(v1) - d1) / voxel_length))
+    #if v1_fract < 0.5:
         # interpolate between v1 and v1+1
         # weight interpolated density sample by length of first voxel segment
-        psum += (voxel_density[v1] * (v1_fract + 0.5) + voxel_density[min(num_voxels - 1, v1 + 1)] * (1 - (v1_fract + 0.5))) * min(v1_fract, (d2 - d1) / voxel_length)
-    else:
+    #    psum += (voxel_density[v1] * (v1_fract + 0.5) + voxel_density[min(num_voxels - 1, v1 + 1)] * (1 - (v1_fract + 0.5))) * min(v1_fract, (d2 - d1) / voxel_length)
+    #else:
         # interpolate between v1-1 and v1
         # weight interpolated density sample by length of first voxel segment
-        psum += (voxel_density[max(0, v1 - 1)] * (v1_fract - 0.5) + voxel_density[v1] * (1 - (v1_fract + 0.5))) * min(v1_fract, (d2 - d1) / voxel_length)
+    #    psum += (voxel_density[max(0, v1 - 1)] * (v1_fract - 0.5) + voxel_density[v1] * (1 - (v1_fract + 0.5))) * min(v1_fract, (d2 - d1) / voxel_length)
 
 
-    if v1 == v2:
+    #if v1 == v2:
         # stop if only one voxel falls (partly) within pixel tube
-        return psum
+    #    return psum
 
     # intermediate samples:
     # no interpolation required as sample points lie on voxel centers and voxels match pixel tube in height
     # also voxels are fully inside the pixel tube => weight = 1
-    for i in range(v1 + 1, v2):
+    for i in range(v1, v2 + 1):
         psum += voxel_density[i]
 
     # handle last voxel v2:
     # analogous to v1
-    v2_fract = max(0.0, min(1.0, (d2 - voxel_start(v2)) / voxel_length))
-    if v2_fract < 0.5:
-        psum += (voxel_density[v2 - 1] * (1 - (v2_fract + 0.5)) + voxel_density[v2] * (v2_fract + 0.5)) * v2_fract
-    else:
-        psum += (voxel_density[v2] * (1 - (v2_fract - 0.5)) + voxel_density[min(num_voxels - 1, v2 + 1)] * (v2_fract - 0.5)) * v2_fract
+    #v2_fract = max(0.0, min(1.0, (d2 - voxel_start(v2)) / voxel_length))
+    #if v2_fract < 0.5:
+    #    psum += (voxel_density[v2 - 1] * (1 - (v2_fract + 0.5)) + voxel_density[v2] * (v2_fract + 0.5)) * v2_fract
+    #else:
+    #   psum += (voxel_density[v2] * (1 - (v2_fract - 0.5)) + voxel_density[min(num_voxels - 1, v2 + 1)] * (v2_fract - 0.5)) * v2_fract
 
 
     return psum
@@ -358,11 +358,11 @@ else:
             B_tcull = particle_count_behind_depth(t_cull, t_max)
             B_taccum = particle_count_behind_depth(t_accum, t_max)
 
-            accProb = acceptance_probability(C_accum, B_taccum, B_tsample, B_tmin, a_sample)
+
 
             N = max(1.0, B_tmin)
 
-            print(f"{rays_that_hit} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}, accProb= {accProb}")
+            print(f"{rays_that_hit} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
 
 
             # Algorithm 1:
@@ -374,6 +374,7 @@ else:
 
 
             if hit_depth <= t_accum:
+                accProb = acceptance_probability(C_accum, B_taccum, B_tsample, B_tmin, a_sample)
                 if random.random() <= accProb and hit_depth < t_accum:
                     t_accum = hit_depth
                     C_accum = a_sample
