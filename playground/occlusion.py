@@ -21,7 +21,7 @@ radius = 0.02
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
-use_probabilistic_culling = True
+use_probabilistic_culling = False
 N_budget = 25
 
 voxel_length = dataset_length / num_voxels
@@ -362,8 +362,9 @@ else:
 
             N = max(1.0, B_tmin)
 
-            print(f"{rays_that_hit} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
-
+            #print(f"{rays_that_hit} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
+            print("%i | N= %.4f, t_max= %.2e, t_sample= %.4f, B_tsample= %.4f, t_cull= %.4f, C_cull= %.4f, B_tcull= %.4f, t_accum= %.4f, C_accum = %.4f, B_taccum= %.4f"
+                  % (rays_that_hit,N,t_max,hit_depth,B_tsample, t_cull, C_cull, B_tcull, t_accum, C_accum, B_taccum))
 
             # Algorithm 1:
 
