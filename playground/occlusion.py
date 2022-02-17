@@ -297,6 +297,9 @@ if use_vanilla_raycasting:
     plt.plot([d for d in hit_sequence_depth])
     plt.xlabel('ray #')
     plt.ylabel('nearest hit')
+    depth_seq_min = min(hit_sequence_depth)
+    depth_seq_max = max(hit_sequence_depth)
+    plt.gca().set_ylim([depth_seq_min, depth_seq_max])
     plt.title('Depth sequence of nearest hits (normal raycasting)')
     plt.show(block=False)
 
@@ -399,6 +402,8 @@ if use_probabilistic_culling:
     plt.plot([d for d in hit_sequence_depth])
     plt.xlabel('ray #')
     plt.ylabel('nearest hit')
+    if use_vanilla_raycasting:
+        plt.gca().set_ylim([depth_seq_min, depth_seq_max])
     plt.title('Depth sequence of nearest hits (probabilistic)')
     plt.show(block=False)
 
