@@ -21,7 +21,7 @@ radius = 0.02
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
-use_probabilistic_culling = False
+use_probabilistic_culling = True
 N_budget = 25
 
 voxel_length = dataset_length / num_voxels
@@ -163,11 +163,14 @@ def accumulate_confidence(N: float, a: float, k: int):
 def acceptance_probability(C_accum: float, B_taccum: float, B_tsample: float, B_tmin: float, a: float):
     # Eq. (15)
     n = math.log(1.0 - (B_taccum / B_tsample) * C_accum, 1.0 - a)
+    # As Eq. (15) is an inequality that sets the lower bound for minimum unique particles n,
+    # we set n as the next larger integer
     if math.fmod(n, 1.0) == 0.0:
         n += 1
     else:
         n = math.ceil(n)
 
+    # D(t_min, t_sample) = B(t_min) - B(t_sample) = D(t_min, t_max) - D(t_sample, t_max)
     D_tmin_ts = B_tmin - B_tsample
 
     # Eq. (20)
@@ -183,12 +186,14 @@ def acceptance_probability(C_accum: float, B_taccum: float, B_tsample: float, B_
     # Eq. (22)
     p = D_tmin_ts / B_tmin
 
+    # Eq. (30) [App. A]
     mu = N_budget * p
     sigma = N_budget * p * (1-p)
 
-    return 1.0 - cdf_normal((k - 0.5 - mu) / math.sqrt(sigma))
+    return 1.0 - cdf_normal((k + 0.5 - mu) / math.sqrt(sigma))
 
 def cdf_normal(x):
+    # In the real program, this would be a lookup of precomputed values
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2)))
 
 def particle_count_behind_depth(d1: float, d2: float):
@@ -202,38 +207,15 @@ def particle_count_behind_depth(d1: float, d2: float):
     v1 = max(0, min(num_voxels - 1, math.floor(depth_to_voxel(d1))))  # the voxel that d1 lives in
     v2 = max(0, min(num_voxels - 1, math.floor(depth_to_voxel(d2))))  # the voxel that d2 lives in
 
-    # handle first voxel v1:
-    # sample it at d1 (linear interp with either v1-1 or v1+1)
-    # and weight sample with v1_fract, i.e. how much of the voxel actually falls within the pixel tube
-    #v1_fract = max(0.0, min(1.0, (voxel_end(v1) - d1) / voxel_length))
-    #if v1_fract < 0.5:
-        # interpolate between v1 and v1+1
-        # weight interpolated density sample by length of first voxel segment
-    #    psum += (voxel_density[v1] * (v1_fract + 0.5) + voxel_density[min(num_voxels - 1, v1 + 1)] * (1 - (v1_fract + 0.5))) * min(v1_fract, (d2 - d1) / voxel_length)
-    #else:
-        # interpolate between v1-1 and v1
-        # weight interpolated density sample by length of first voxel segment
-    #    psum += (voxel_density[max(0, v1 - 1)] * (v1_fract - 0.5) + voxel_density[v1] * (1 - (v1_fract + 0.5))) * min(v1_fract, (d2 - d1) / voxel_length)
+    # The return value of this function is only dependent on the voxels d1 and d2 live in.
+    # If e.g. d1 varies within one voxel, the same value will be returned.
+    # Is weighing samples from v1 and v2 by (voxel_end(v1) - d1) / voxel_length and
+    # (d2 - voxel_start(v2) / voxel_length) respectively and option?
 
-
-    #if v1 == v2:
-        # stop if only one voxel falls (partly) within pixel tube
-    #    return psum
-
-    # intermediate samples:
     # no interpolation required as sample points lie on voxel centers and voxels match pixel tube in height
     # also voxels are fully inside the pixel tube => weight = 1
     for i in range(v1, v2 + 1):
         psum += voxel_density[i]
-
-    # handle last voxel v2:
-    # analogous to v1
-    #v2_fract = max(0.0, min(1.0, (d2 - voxel_start(v2)) / voxel_length))
-    #if v2_fract < 0.5:
-    #    psum += (voxel_density[v2 - 1] * (1 - (v2_fract + 0.5)) + voxel_density[v2] * (v2_fract + 0.5)) * v2_fract
-    #else:
-    #   psum += (voxel_density[v2] * (1 - (v2_fract - 0.5)) + voxel_density[min(num_voxels - 1, v2 + 1)] * (v2_fract - 0.5)) * v2_fract
-
 
     return psum
 
@@ -265,6 +247,7 @@ plt.xlabel('Depth')
 plt.title('Particle density splatted')
 plt.show(block=False)
 
+# show estimated particle counts behind certain depths
 voxel_density_integrated = [particle_count_behind_depth(voxel_start(v), float_info.max) for v in range(num_voxels)]
 plt.figure()
 plt.plot(voxel_density_integrated)
@@ -329,6 +312,8 @@ else:
         nearest: particle = None
         hit_depth = float_info.max
 
+        # This is what we do instead of moving meshlets behind a certain depth into the occluded class:
+        # We take a per pixel decision by clipping rays cast at t_max = t_cull if the culling confidence in sufficient.
         if C_cull > 0.95:
             t_max = t_cull
 
@@ -336,8 +321,10 @@ else:
         for p in particles:
             if p.does_intersect(r):
                 t = p.intersect(r)
+
+                # clip ray at t_max
                 if t > t_max:
-                    continue  # clip ray at t_max
+                    continue
 
                 if first == None:
                     first = p
@@ -358,8 +345,7 @@ else:
             B_tcull = particle_count_behind_depth(t_cull, t_max)
             B_taccum = particle_count_behind_depth(t_accum, t_max)
 
-
-
+            # Estimate of #particles we can hit with a ray cast out of this pixel's footprint
             N = max(1.0, B_tmin)
 
             #print(f"{rays_that_hit} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
@@ -367,12 +353,9 @@ else:
                   % (rays_that_hit,N,t_max,hit_depth,B_tsample, t_cull, C_cull, B_tcull, t_accum, C_accum, B_taccum))
 
             # Algorithm 1:
-
             if hit_depth <= t_cull:
                 C_cull = accumulate_confidence(N, a_sample, k_cull)
                 k_cull += 1
-
-
 
             if hit_depth <= t_accum:
                 accProb = acceptance_probability(C_accum, B_taccum, B_tsample, B_tmin, a_sample)
@@ -388,10 +371,6 @@ else:
                 C_cull = C_accum
                 t_cull = t_accum
                 k_cull = k_accum
-
-
-
-
 
     print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
     useful_particles = list(set([p for p in hit_sequence]))
