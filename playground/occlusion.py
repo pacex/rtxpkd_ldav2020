@@ -4,6 +4,7 @@
 # x is irrelevant, particles only need a y and depth coordinate in eye space and a mapping to the voxel their center lives in.
 # for simplicity, we do look at rays that are aligned with the voxels "chain", so we do not need actual raycasting
 
+from cProfile import label
 import random
 import string
 import matplotlib.pyplot as plt
@@ -265,7 +266,7 @@ if use_vanilla_raycasting:
     print(f"casting {num_rays} rays into {num_particles} particles (vanilla)...")
     rays_that_hit = 0
     hit_sequence = []
-    hit_sequence_depth = []
+    hit_sequence_depth_vanilla = []
     for r in rays:
         first: particle = None
         nearest: particle = None
@@ -282,23 +283,23 @@ if use_vanilla_raycasting:
         if first != None:
             rays_that_hit += 1
             hit_sequence.append(nearest)
-            hit_sequence_depth.append(hit_depth)
+            hit_sequence_depth_vanilla.append(hit_depth)
             print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
     print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
-    useful_particles = list(set([p for p in hit_sequence]))
-    print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
+    useful_particles_vanilla = list(set([p for p in hit_sequence]))
+    print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_vanilla)} different particles.")
 
     # what is the dataset "front"
-    render_dataset(useful_particles, "hit particles (normal raycasting)")
+    render_dataset(useful_particles_vanilla, "hit particles (normal raycasting)")
 
     # what kind of depths did we hit, and when?
     plt.figure()
     #plt.plot([p.z for p in hit_sequence])
-    plt.plot([d for d in hit_sequence_depth])
+    plt.plot([d for d in hit_sequence_depth_vanilla])
     plt.xlabel('ray #')
     plt.ylabel('nearest hit')
-    depth_seq_min = min(hit_sequence_depth)
-    depth_seq_max = max(hit_sequence_depth)
+    depth_seq_min = min(hit_sequence_depth_vanilla)
+    depth_seq_max = max(hit_sequence_depth_vanilla)
     plt.gca().set_ylim([depth_seq_min, depth_seq_max])
     plt.title('Depth sequence of nearest hits (normal raycasting)')
     plt.show(block=False)
@@ -310,7 +311,7 @@ if use_probabilistic_culling:
     print(f"casting {num_rays} rays into {num_particles} particles (using probabilistic culling)...")
     rays_that_hit = 0
     hit_sequence = []
-    hit_sequence_depth = []
+    hit_sequence_depth_probabilistic = []
 
     t_max = float_info.max  # t_max of rays cast
     t_cull = float_info.max  # to keep names uniform, we call d_cull t_cull in this prototype
@@ -353,7 +354,7 @@ if use_probabilistic_culling:
         if first != None:
             rays_that_hit += 1
             hit_sequence.append(nearest)
-            hit_sequence_depth.append(hit_depth)
+            hit_sequence_depth_probabilistic.append(hit_depth)
             print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
 
             B_tmin = particle_count_behind_depth(0.0, t_max)
@@ -389,17 +390,17 @@ if use_probabilistic_culling:
                 k_cull = k_accum
 
     print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
-    useful_particles = list(set([p for p in hit_sequence]))
+    useful_particles_probabilistic = list(set([p for p in hit_sequence]))
     print(
-        f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
+        f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_probabilistic)} different particles.")
 
     # what is the dataset "front"
-    render_dataset(useful_particles, "hit particles (probabilistic)")
+    render_dataset(useful_particles_probabilistic, "hit particles (probabilistic)")
 
     # what kind of depths did we hit, and when?
     plt.figure()
     #plt.plot([p.z for p in hit_sequence])
-    plt.plot([d for d in hit_sequence_depth])
+    plt.plot([d for d in hit_sequence_depth_probabilistic])
     plt.xlabel('ray #')
     plt.ylabel('nearest hit')
     if use_vanilla_raycasting:
@@ -408,5 +409,10 @@ if use_probabilistic_culling:
     plt.show(block=False)
 
 plt.figure()
-plt.title('just for blocking the program flow')
+plt.xlabel('ray #')
+plt.ylabel('nearest hit')
+plt.plot([d for d in hit_sequence_depth_probabilistic], 'o', label=f'probabilistic: {len(useful_particles_probabilistic)} particles')
+plt.plot([d for d in hit_sequence_depth_vanilla], 'x', label=f'vanilla: {len(useful_particles_vanilla)} particles')
+plt.gca().legend()
+plt.title('combined depth sequence')
 plt.show()
