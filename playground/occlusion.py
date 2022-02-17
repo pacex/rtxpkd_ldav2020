@@ -21,6 +21,7 @@ radius = 0.02
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
+use_vanilla_raycasting = True
 use_probabilistic_culling = True
 N_budget = 25
 
@@ -150,7 +151,7 @@ def render_dataset(parts, title):
     plt.title(title)
     plt.show(block=False)
 
-render_dataset(particles, "Debug Visualization: whole data")
+render_dataset(particles, "Whole data")
 
 
 # functions needed for probabilistic culling
@@ -260,7 +261,7 @@ plt.show(block=False)
 # =============================
 #     RAY CASTING (VANILLA)
 # =============================
-if not use_probabilistic_culling:
+if use_vanilla_raycasting:
     print(f"casting {num_rays} rays into {num_particles} particles (vanilla)...")
     rays_that_hit = 0
     hit_sequence = []
@@ -287,10 +288,22 @@ if not use_probabilistic_culling:
     useful_particles = list(set([p for p in hit_sequence]))
     print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
 
+    # what is the dataset "front"
+    render_dataset(useful_particles, "hit particles (normal raycasting)")
+
+    # what kind of depths did we hit, and when?
+    plt.figure()
+    #plt.plot([p.z for p in hit_sequence])
+    plt.plot([d for d in hit_sequence_depth])
+    plt.xlabel('ray #')
+    plt.ylabel('nearest hit')
+    plt.title('Depth sequence of nearest hits (normal raycasting)')
+    plt.show(block=False)
+
 # ===========================================
 #     RAY CASTING (PROBABILISTIC CULLING)
 # ===========================================
-else:
+if use_probabilistic_culling:
     print(f"casting {num_rays} rays into {num_particles} particles (using probabilistic culling)...")
     rays_that_hit = 0
     hit_sequence = []
@@ -377,20 +390,18 @@ else:
     print(
         f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles)} different particles.")
 
+    # what is the dataset "front"
+    render_dataset(useful_particles, "hit particles (probabilistic)")
 
+    # what kind of depths did we hit, and when?
+    plt.figure()
+    #plt.plot([p.z for p in hit_sequence])
+    plt.plot([d for d in hit_sequence_depth])
+    plt.xlabel('ray #')
+    plt.ylabel('nearest hit')
+    plt.title('Depth sequence of nearest hits (probabilistic)')
+    plt.show(block=False)
 
-
-
-# what is the dataset "front"
-render_dataset(useful_particles, "Debug Visualization: hit particles (normal raycasting)")
-
-# what kind of depths did we hit, and when?
 plt.figure()
-#plt.plot([p.z for p in hit_sequence])
-plt.plot([d for d in hit_sequence_depth])
-plt.xlabel('ray #')
-plt.ylabel('nearest hit')
-plt.title('Depth sequence of nearest hits (normal raycasting)')
+plt.title('just for blocking the program flow')
 plt.show()
-
-# other approaches
