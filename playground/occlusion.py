@@ -17,7 +17,7 @@ dataset_offset = 1
 dataset_length = 25
 num_particles = 500
 num_rays = 1000
-radius = 0.02
+radius = 0.08
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
@@ -156,10 +156,16 @@ render_dataset(particles, "Whole data")
 
 # functions needed for probabilistic culling
 
-def accumulate_confidence(N: float, a: float, k: int):
-    M = 1.0 - (1.0 / N)
-    Enk = (1.0 - pow(M, k)) / (1.0 - M)  # Eq. (5)
-    return 1.0 - pow(1.0 - a, Enk)  # Eq. (7)
+def accumulate_confidence(C: float, a: float, delta_Enk: float):
+    inv_c = 1.0 - C
+    inv_c *= pow(1-a, delta_Enk)
+    return 1.0 - inv_c
+
+def expected_number_of_unique_particles(N: float, k: int):
+    # Eq. (5)
+    M = 1.0 - 1.0 / N
+    return (1.0 - pow(M, k)) / (1.0 - M)
+
 
 def acceptance_probability(C_accum: float, B_taccum: float, B_tsample: float, B_tmin: float, a: float):
     # Eq. (15)
@@ -201,22 +207,32 @@ def particle_count_between_depths(d1: float, d2: float):
     # This is the D(d1,d2) function from Mohamed's paper,
     # i.e. how many particles do we estimate to be in the pixel tube clipped to d1 and d2?
 
-    if d1 >= d2:
+    if d1 >= d2 or d2 <= voxel_start(0) or d1 >= voxel_end(num_voxels-1):
         return 0.0
 
     psum = 0.0
     v1 = max(0, min(num_voxels - 1, math.floor(depth_to_voxel(d1))))  # the voxel that d1 lives in
     v2 = max(0, min(num_voxels - 1, math.floor(depth_to_voxel(d2))))  # the voxel that d2 lives in
 
+    d1 = max(voxel_start(v1), d1)
+    d2 = min(voxel_end(v2), d2)
+
     # The return value of this function is only dependent on the voxels d1 and d2 live in.
     # If e.g. d1 varies within one voxel, the same value will be returned.
     # Is weighing samples from v1 and v2 by (voxel_end(v1) - d1) / voxel_length and
     # (d2 - voxel_start(v2) / voxel_length) respectively and option?
 
+    if v1 == v2:
+        return voxel_density[v1] * ((d2 - d1) / voxel_length)
+
+    psum += voxel_density[v1] * ((voxel_end(v1) - d1) / voxel_length)
+
     # no interpolation required as sample points lie on voxel centers and voxels match pixel tube in height
     # also voxels are fully inside the pixel tube => weight = 1
-    for i in range(v1, v2 + 1):
+    for i in range(v1 + 1, v2):
         psum += voxel_density[i]
+
+    psum += voxel_density[v2] * ((d2 - voxel_start(v2)) / voxel_length)
 
     return psum
 
@@ -324,6 +340,9 @@ if use_probabilistic_culling:
     C_accum = 0.0
     k_accum = 1
 
+    Enk_previous_cull = 0.0
+    Enk_previous_accum = 0.0
+
     a_sample = (2 * radius) / voxel_length
 
     ray_index = 0
@@ -334,7 +353,7 @@ if use_probabilistic_culling:
 
         # This is what we do instead of moving meshlets behind a certain depth into the occluded class:
         # We take a per pixel decision by clipping rays cast at t_max = t_cull if the culling confidence in sufficient.
-        if C_cull > 0.95:
+        if C_cull > 0.8:
             t_max = t_cull
 
         # ray cast
@@ -374,32 +393,43 @@ if use_probabilistic_culling:
             B_tcull = particle_count_between_depths(t_cull, t_max)
             B_taccum = particle_count_between_depths(t_accum, t_max)
 
+
+
             # Estimate of #particles we can hit with a ray cast out of this pixel's footprint
             N = max(1.0, B_tmin)
 
             #print(f"{rays_that_hit_probabilistic} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
-            print("%i | N= %.4f, t_max= %.2e, t_sample= %.4f, B_tsample= %.4f, t_cull= %.4f, C_cull= %.4f, B_tcull= %.4f, t_accum= %.4f, C_accum = %.4f, B_taccum= %.4f"
+            print("%i | N= %.4f, t_max= %.2e, t_sample= %.4f, B_tsample= %.4f, t_cull= %.2e, C_cull= %.4f, B_tcull= %.4f, t_accum= %.2e, C_accum = %.4f, B_taccum= %.4f"
                   % (ray_index,N,t_max,hit_depth,B_tsample, t_cull, C_cull, B_tcull, t_accum, C_accum, B_taccum))
 
             # Algorithm 1:
             if hit_depth <= t_cull:
-                C_cull = accumulate_confidence(N, a_sample, k_cull)
+                Enk_cull = expected_number_of_unique_particles(max(1.0, B_tmin - B_tcull), k_cull)
+                delta_Enk_cull = Enk_cull - Enk_previous_cull
+                C_cull = accumulate_confidence(C_cull, a_sample, delta_Enk_cull)
                 k_cull += 1
+                Enk_previous_cull = Enk_cull
 
             if hit_depth <= t_accum:
                 accProb = acceptance_probability(C_accum, B_taccum, B_tsample, B_tmin, a_sample)
                 if random.random() <= accProb and hit_depth < t_accum:
                     t_accum = hit_depth
                     C_accum = a_sample
+                    Enk_previous_accum = 0.0
                     k_accum = 1
                 else:
-                    C_accum = accumulate_confidence(N, a_sample, k_accum)
+                    Enk_accum = expected_number_of_unique_particles(max(1.0, B_tmin - B_taccum), k_accum)
+                    delta_Enk_accum = Enk_accum - Enk_previous_accum
+                    C_accum = accumulate_confidence(C_accum, a_sample, delta_Enk_accum)
                     k_accum += 1
+                    Enk_previous_accum = Enk_accum
 
             if B_taccum * C_accum > B_tcull * C_cull:
                 C_cull = C_accum
                 t_cull = t_accum
                 k_cull = k_accum
+                Enk_previous_cull = Enk_previous_accum
+
         ray_index += 1
 
     print(f"out of {num_rays} rays, {rays_that_hit_probabilistic} hit something.")
