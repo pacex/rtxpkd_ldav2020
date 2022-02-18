@@ -197,7 +197,7 @@ def cdf_normal(x):
     # In the real program, this would be a lookup of precomputed values
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2)))
 
-def particle_count_behind_depth(d1: float, d2: float):
+def particle_count_between_depths(d1: float, d2: float):
     # This is the D(d1,d2) function from Mohamed's paper,
     # i.e. how many particles do we estimate to be in the pixel tube clipped to d1 and d2?
 
@@ -249,7 +249,7 @@ plt.title('Particle density splatted')
 plt.show(block=False)
 
 # show estimated particle counts behind certain depths
-voxel_density_integrated = [particle_count_behind_depth(voxel_start(v), float_info.max) for v in range(num_voxels)]
+voxel_density_integrated = [particle_count_between_depths(voxel_start(v), float_info.max) for v in range(num_voxels)]
 plt.figure()
 plt.plot(voxel_density_integrated)
 plt.ylabel('Density')
@@ -369,10 +369,10 @@ if use_probabilistic_culling:
             hit_sequence_depth_probabilistic.append(hit_depth)
             print(f"{ray_index} | ray {r} hit {nearest.to_string()} at depth {hit_depth}")
 
-            B_tmin = particle_count_behind_depth(0.0, t_max)
-            B_tsample = particle_count_behind_depth(hit_depth, t_max)
-            B_tcull = particle_count_behind_depth(t_cull, t_max)
-            B_taccum = particle_count_behind_depth(t_accum, t_max)
+            B_tmin = particle_count_between_depths(0.0, t_max)
+            B_tsample = particle_count_between_depths(hit_depth, t_max)
+            B_tcull = particle_count_between_depths(t_cull, t_max)
+            B_taccum = particle_count_between_depths(t_accum, t_max)
 
             # Estimate of #particles we can hit with a ray cast out of this pixel's footprint
             N = max(1.0, B_tmin)
