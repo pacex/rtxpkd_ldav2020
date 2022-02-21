@@ -34,8 +34,9 @@ namespace pkd {
       uint32_t* coverageBufferPtr;
       float4   *accumBufferPtr;
       float4   *normalAccumBufferPtr;
-      float3* depthConfidenceAccumBufferPtr; //(d,C,k)
-      float4* depthConfidenceCullBufferPtr; //(d,C,k, confidentDepth)
+      float4* depthConfidenceAccumBufferPtr; //(d,C,k,Enk)
+      float4* depthConfidenceCullBufferPtr; //(d,C,k,Enk)
+      float* confidentDepthBufferPtr;
       Particle *particleBuffer;
       FrameState *frameStateBuffer;
       vec3f* densityContextBuffer;

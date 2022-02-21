@@ -74,6 +74,7 @@ namespace pkd {
           { "depthConfidenceAccumBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthConfidenceAccumBufferPtr)},
           { "coverageBuffer",      OWL_BUFPTR, OWL_OFFSETOF(RayGenData, coverageBufferPtr)},
           { "depthConfidenceCullBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, depthConfidenceCullBufferPtr)},
+          { "confidentDepthBuffer",     OWL_BUFPTR, OWL_OFFSETOF(RayGenData, confidentDepthBufferPtr)},
           { "particleBuffer",  OWL_BUFPTR, OWL_OFFSETOF(RayGenData,particleBuffer)},
           { "frameStateBuffer",OWL_BUFPTR, OWL_OFFSETOF(RayGenData,frameStateBuffer)},
           { "fbSize",          OWL_INT2,   OWL_OFFSETOF(RayGenData,fbSize)},
@@ -211,9 +212,9 @@ namespace pkd {
         owlBufferResize(normalBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "normalBuffer", normalBuffer);
 
-        //DepthAccumBuffer
+        //DepthConfidenceAccumBuffer
         if (!depthConfidenceAccumBuffer)
-            depthConfidenceAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT3, fbSize.x * fbSize.y, nullptr);
+            depthConfidenceAccumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
 
         owlBufferResize(depthConfidenceAccumBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "depthConfidenceAccumBuffer", depthConfidenceAccumBuffer);
@@ -225,12 +226,19 @@ namespace pkd {
         owlBufferResize(depthBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "depthBuffer", depthBuffer);
 
-        //CoverageAccumBuffer
+        //DepthConfidenceCullBuffer
         if (!depthConfidenceCullBuffer)
             depthConfidenceCullBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
 
         owlBufferResize(depthConfidenceCullBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "depthConfidenceCullBuffer", depthConfidenceCullBuffer);
+
+        //ConfidentDepthBuffer
+        if (!confidentDepthBuffer)
+            confidentDepthBuffer = owlDeviceBufferCreate(context, OWL_FLOAT, fbSize.x * fbSize.y, nullptr);
+
+        owlBufferResize(confidentDepthBuffer, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "confidentDepthBuffer", confidentDepthBuffer);
 
         //CoverageBuffer
         if (!coverageBuffer)
