@@ -441,6 +441,7 @@ namespace pkd {
       if (pixelID.x >= self.fbSize.x) return;
       if (pixelID.y >= self.fbSize.y) return;
       const int pixelIdx = pixelID.x+self.fbSize.x*pixelID.y;
+      const int debugPixelIdx = 364383;
 
       // for multi-gpu: only render every deviceCount'th column of 32 pixels:
       if (((pixelID.x/32) % self.deviceCount) != self.deviceIndex)
@@ -523,9 +524,9 @@ namespace pkd {
             float accProb = acceptanceProbability(self, pixelIdx, B_d_accum, B_d_sample, B_d_min, a_sample);
 
             // DEBUG OUTPUT
-            if (fs->debugOutput && pixelIdx == 364383) {
+            if (fs->debugOutput && pixelIdx == debugPixelIdx) {
                 printf("\033[1;37m%i |\033[0;33m B_d_min= %f,\033[0;31m d_culled= %f,\033[0;36m d_sample= %f,\033[0;33m B_d_sample= %f,\033[0;36m d_cull= %f,\033[0;32m C_cull= %f,\033[0;33m B_d_cull= %f,\033[0;36m d_accum= %f,\033[0;32m C_accum= %f,\033[0;33m B_d_accum= %f,\033[0;34m accProb= %f\033[0m\n", 
-                    fs->accumID, B_d_min, self.depthConfidenceCullBufferPtr[pixelIdx].w, d_sample, B_d_sample, d_cull, 
+                    fs->accumID, B_d_min, self.confidentDepthBufferPtr[pixelIdx], d_sample, B_d_sample, d_cull, 
                     self.depthConfidenceCullBufferPtr[pixelIdx].y, B_d_cull, d_accum, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, accProb);
             }
 
@@ -624,13 +625,19 @@ namespace pkd {
 
       uint32_t rgba_col = make_rgba8(col / (fs->accumID + 1.f));
       uint32_t rgba_norm = make_rgba8(abs(norm) / (fs->accumID + 1.f));
-      self.colorBufferPtr[pixelIdx] = rgba_col;
+      
 
       //Debug
+      if (fs->debugOutput && pixelIdx == debugPixelIdx) {
+          rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 1.0f, 1.0f));
+      }
       //self.normalBufferPtr[pixelIdx] = rgba_norm;
       float a, b, c, d;
       self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.0f, 0.0f, 0.0f, a, b, c, d)), 0.0f));
       
+
+      self.colorBufferPtr[pixelIdx] = rgba_col;
+
       vec3f lowerBound = self.densityContextBuffer[0];
       vec3f upperBound = self.densityContextBuffer[1];
       float boundSize = length(upperBound - lowerBound);
