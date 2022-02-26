@@ -161,56 +161,52 @@ namespace pkd {
               const FrameState* fs = &self.frameStateBuffer[0];
               float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
 
-              bool past_d_sample = false;
-              bool past_d_cull = false;
-              bool past_d_accum = false;
 
-              float t_last = t1;
-              for (float t = t1 - 0.5 * step; t > t0; t -= step) {
+
+
+              for (float t = t0; t < t1; t += step) {
                   
-                  float localDensity = getDensity(self, ray.origin + t * ray.direction);
+                  float t_next = t + step;
 
+                  float localDensity = getDensity(self, ray.origin + (t + 0.5f * step) * ray.direction);
 
-                  if (t > d_sample) {
+                  if (t_next > t1) {
+                      localDensity *= (t1 - t) / step;
+                  }
+                  
+
+                  if (t >= d_sample) {
                       B_d_sample += localDensity;
                   }
-                  else if (!past_d_sample) {
-                      B_d_sample *= step * pixel_footprint;
-                      B_d_sample += getDensity(self, ray.origin + d_sample * ray.direction) * (t_last - d_sample) * pixel_footprint;
-                      past_d_sample = true;
+                  else if (t_next >= d_sample) {
+                      B_d_sample += ((t_next - d_sample) / step) * localDensity;
                   }
+                  
 
-                  if (t > d_cull) {
+                  if (t >= d_cull) {
                       B_d_cull += localDensity;
                   }
-                  else if (!past_d_cull) {
-                      B_d_cull *= step * pixel_footprint;
-                      B_d_cull += getDensity(self, ray.origin + d_cull * ray.direction) * (t_last - d_cull) * pixel_footprint;
-                      past_d_cull = true;
+                  else if (t_next >= d_cull) {
+                      B_d_cull += ((t_next - d_cull) / step) * localDensity;
                   }
+                  
 
-                  if (t > d_accum) {
+                  if (t >= d_accum) {
                       B_d_accum += localDensity;
                   }
-                  else if (!past_d_accum) {
-                      B_d_accum *= step * pixel_footprint;
-                      B_d_accum += getDensity(self, ray.origin + d_accum * ray.direction) * (t_last - d_accum) * pixel_footprint;
-                      past_d_accum = true;
+                  else if (t_next >= d_accum) {
+                      B_d_accum += ((t_next - d_accum) / step) * localDensity;
                   }
+                  
 
                   B_d_min += localDensity;
 
-                  t_last = t + 0.5 * step;
               }
 
-              B_d_min *= step * pixel_footprint;
-              if (!past_d_sample)
-                  B_d_sample = B_d_min;
-              if (!past_d_cull)
-                  B_d_cull = B_d_min;
-              if (!past_d_accum)
-                  B_d_accum = B_d_min;
-
+              B_d_sample *= pixel_footprint * step;
+              B_d_cull *= pixel_footprint * step;
+              B_d_accum *= pixel_footprint * step;
+              B_d_min *= pixel_footprint * step;
 
               /*
               for (float t = t0 + 0.5f * step; t < t1; t += step) {
@@ -441,7 +437,7 @@ namespace pkd {
       if (pixelID.x >= self.fbSize.x) return;
       if (pixelID.y >= self.fbSize.y) return;
       const int pixelIdx = pixelID.x+self.fbSize.x*pixelID.y;
-      const int debugPixelIdx = 364383;
+      const int debugPixelIdx = 364383 - 150 * self.fbSize.x;
 
       // for multi-gpu: only render every deviceCount'th column of 32 pixels:
       if (((pixelID.x/32) % self.deviceCount) != self.deviceIndex)
@@ -489,7 +485,7 @@ namespace pkd {
       for (int s = 0; s < fs->samplesPerPixel; s++) {
         float u = float(pixelID.x + rnd());
         float v = float(pixelID.y + rnd());
-        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd, 1e-6f, self.confidentDepthBufferPtr[pixelIdx] + self.radius);
+        owl::Ray ray = Camera::generateRay(*fs, u, v, rnd, 1e-6f, self.confidentDepthBufferPtr[pixelIdx]);
         col += vec4f(traceRay(self, ray, rnd,prd),1);
 
         //Normals
@@ -505,7 +501,7 @@ namespace pkd {
 
         //Depth Confidence Accumulation
         if (fs->probabilisticCulling && prd.particleID != -1 && fs->accumID > 0) {
-            float d_sample = prd.t;
+            float d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
             float a_sample = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
