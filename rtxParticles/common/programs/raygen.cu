@@ -322,10 +322,10 @@ namespace pkd {
           return 1.0f - normalCdf(self, (float(k) + 0.5f - mean) / sqrt(var));
       }
 
-      inline __device__ float acceptanceProbability(const RayGenData& self, const int& pixelIdx,
-          const float B_d_accum, const float B_d_sample, const float B_d_min, const float& a) {
+      inline __device__ float acceptanceProbability(const RayGenData& self, const float C_accum,
+          const float B_d_accum, const float B_d_sample, const float B_d_min, const float a) {
           
-          int n_ds = minUniqueParticles(B_d_accum, B_d_sample, self.depthConfidenceAccumBufferPtr[pixelIdx].y, a);
+          int n_ds = minUniqueParticles(B_d_accum, B_d_sample, C_accum, a);
 
 
           float D_d_min_d_sample = B_d_min - B_d_sample;
@@ -519,7 +519,7 @@ namespace pkd {
                 B_d_min, B_d_sample, B_d_cull, B_d_accum);
             
 
-            float accProb = acceptanceProbability(self, pixelIdx, B_d_accum, B_d_sample, B_d_min, a_sample);
+            float accProb = acceptanceProbability(self, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, B_d_sample, B_d_min, a_sample);
 
             // DEBUG OUTPUT
             if (fs->debugOutput && pixelIdx == debugPixelIdx) {
