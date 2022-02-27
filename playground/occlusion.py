@@ -17,10 +17,13 @@ dataset_offset = 1
 dataset_length = 25
 num_particles = 500
 num_rays = 1000
-radius = 0.02
+radius = 0.08
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
+use_vanilla_raycasting = True
+use_probabilistic_culling = True
+N_budget = 25
 
 voxel_length = dataset_length / num_voxels
 
@@ -148,7 +151,92 @@ def render_dataset(parts, title):
     plt.title(title)
     plt.show(block=False)
 
-render_dataset(particles, "Debug Visualization: whole data")
+render_dataset(particles, "Whole data")
+
+
+# functions needed for probabilistic culling
+
+def accumulate_confidence(C: float, a: float, delta_Enk: float):
+    inv_c = 1.0 - C
+    inv_c *= pow(1-a, delta_Enk)
+    return 1.0 - inv_c
+
+def expected_number_of_unique_particles(N: float, k: int):
+    # Eq. (5)
+    M = 1.0 - 1.0 / N
+    return (1.0 - pow(M, k)) / (1.0 - M)
+
+
+def acceptance_probability(C_accum: float, B_taccum: float, B_tsample: float, B_tmin: float, a: float):
+    # Eq. (15)
+    n = math.log(1.0 - (B_taccum / B_tsample) * C_accum, 1.0 - a)
+    # As Eq. (15) is an inequality that sets the lower bound for minimum unique particles n,
+    # we set n as the next larger integer
+    if math.fmod(n, 1.0) == 0.0:
+        n += 1
+    else:
+        n = math.ceil(n)
+
+    # D(t_min, t_sample) = B(t_min) - B(t_sample) = D(t_min, t_max) - D(t_sample, t_max)
+    D_tmin_ts = B_tmin - B_tsample
+
+    # Eq. (20)
+    if n > 0.98 * D_tmin_ts:
+        return 0.0
+
+    # Eq. (18)
+    M = 1.0 - (1.0 / D_tmin_ts)
+
+    # Eq. (19)
+    k = math.ceil(math.log(1.0 - (n / D_tmin_ts), M))
+
+    # Eq. (22)
+    p = D_tmin_ts / B_tmin
+
+    # Eq. (30) [App. A]
+    mu = N_budget * p
+    sigma = N_budget * p * (1-p)
+
+    return 1.0 - cdf_normal((k + 0.5 - mu) / math.sqrt(sigma))
+
+def cdf_normal(x):
+    # In the real program, this would be a lookup of precomputed values
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2)))
+
+def particle_count_between_depths(d1: float, d2: float):
+    # This is the D(d1,d2) function from Mohamed's paper,
+    # i.e. how many particles do we estimate to be in the pixel tube clipped to d1 and d2?
+
+    if d1 >= d2 or d2 <= voxel_start(0) or d1 >= voxel_end(num_voxels-1):
+        return 0.0
+
+    psum = 0.0
+    v1 = max(0, min(num_voxels - 1, math.floor(depth_to_voxel(d1))))  # the voxel that d1 lives in
+    v2 = max(0, min(num_voxels - 1, math.floor(depth_to_voxel(d2))))  # the voxel that d2 lives in
+
+    d1 = max(voxel_start(v1), d1)
+    d2 = min(voxel_end(v2), d2)
+
+    # The return value of this function is only dependent on the voxels d1 and d2 live in.
+    # If e.g. d1 varies within one voxel, the same value will be returned.
+    # Is weighing samples from v1 and v2 by (voxel_end(v1) - d1) / voxel_length and
+    # (d2 - voxel_start(v2) / voxel_length) respectively and option?
+
+    if v1 == v2:
+        return voxel_density[v1] * ((d2 - d1) / voxel_length)
+
+    psum += voxel_density[v1] * ((voxel_end(v1) - d1) / voxel_length)
+
+    # no interpolation required as sample points lie on voxel centers and voxels match pixel tube in height
+    # also voxels are fully inside the pixel tube => weight = 1
+    for i in range(v1 + 1, v2):
+        psum += voxel_density[i]
+
+    psum += voxel_density[v2] * ((d2 - voxel_start(v2)) / voxel_length)
+
+    return psum
+
+
 
 # generate rays
 for i in range(num_rays):
@@ -176,44 +264,198 @@ plt.xlabel('Depth')
 plt.title('Particle density splatted')
 plt.show(block=False)
 
-# now let us start raycasting (vanilla)
-print(f"casting {num_rays} rays into {num_particles} particles...")
-rays_that_hit = 0
-hit_sequence = []
-hit_sequence_depth = []
-for r in rays:
-    first: particle = None
-    nearest: particle = None
-    hit_depth = float_info.max
-    for p in particles:
-        if p.does_intersect(r):
-            t = p.intersect(r)
-            if first == None:
-                first = p
-                nearest = p
-            if hit_depth > t:
-                nearest = p
-                hit_depth = t
-    if first != None:
-        rays_that_hit += 1
-        hit_sequence.append(nearest)
-        hit_sequence_depth.append(hit_depth)
-        print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
-
-print(f"out of {num_rays} rays, {rays_that_hit} hit something.")
-useful_particles = list(set([p for p in hit_sequence]))
-print(f"but we only actually hit {len(useful_particles)} different particles.")
-
-# what is the dataset "front"
-render_dataset(useful_particles, "Debug Visualization: hit particles (normal raycasting)")
-
-# what kind of depths did we hit, and when?
+# show estimated particle counts behind certain depths
+voxel_density_integrated = [particle_count_between_depths(voxel_start(v), float_info.max) for v in range(num_voxels)]
 plt.figure()
-#plt.plot([p.z for p in hit_sequence])
-plt.plot([d for d in hit_sequence_depth])
+plt.plot(voxel_density_integrated)
+plt.ylabel('Density')
+plt.xlabel('Depth')
+plt.title('Particle density integrated behind depth')
+plt.show(block=False)
+
+
+# =============================
+#     RAY CASTING (VANILLA)
+# =============================
+if use_vanilla_raycasting:
+    print(f"casting {num_rays} rays into {num_particles} particles (vanilla)...")
+    rays_that_hit_vanilla = 0
+    hit_sequence = []
+    hit_sequence_depth_vanilla = []
+    for r in rays:
+        first: particle = None
+        nearest: particle = None
+        hit_depth = float_info.max
+        for p in particles:
+            if p.does_intersect(r):
+                t = p.intersect(r)
+                if first == None:
+                    first = p
+                    nearest = p
+                if hit_depth > t:
+                    nearest = p
+                    hit_depth = t
+        if first != None:
+            rays_that_hit_vanilla += 1
+            hit_sequence.append(nearest)
+            hit_sequence_depth_vanilla.append(hit_depth)
+            print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+        else:
+            hit_sequence_depth_vanilla.append(np.nan)
+    print(f"out of {num_rays} rays, {rays_that_hit_vanilla} hit something.")
+    useful_particles_vanilla = list(set([p for p in hit_sequence]))
+    print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_vanilla)} different particles.")
+
+    # what is the dataset "front"
+    render_dataset(useful_particles_vanilla, "hit particles (normal raycasting)")
+
+    # what kind of depths did we hit, and when?
+    plt.figure()
+    #plt.plot([p.z for p in hit_sequence])
+    plt.plot([d for d in hit_sequence_depth_vanilla], 'x')
+    plt.xlabel('ray #')
+    plt.ylabel('nearest hit')
+    depth_seq_min = min(hit_sequence_depth_vanilla)
+    depth_seq_max = max(hit_sequence_depth_vanilla)
+    plt.gca().set_ylim([depth_seq_min, depth_seq_max])
+    plt.title('Depth sequence of nearest hits (normal raycasting)')
+    plt.show(block=False)
+
+# ===========================================
+#     RAY CASTING (PROBABILISTIC CULLING)
+# ===========================================
+if use_probabilistic_culling:
+    print(f"casting {num_rays} rays into {num_particles} particles (using probabilistic culling)...")
+    rays_that_hit_probabilistic = 0
+    rays_that_miss_probilistic = 0
+    rays_culled_probabilistic = 0
+    hit_sequence = []
+    hit_sequence_depth_probabilistic = []
+
+    t_max = float_info.max  # t_max of rays cast
+    t_cull = float_info.max  # to keep names uniform, we call d_cull t_cull in this prototype
+    C_cull = 0.0
+    k_cull = 1
+    t_accum = float_info.max
+    C_accum = 0.0
+    k_accum = 1
+
+    Enk_previous_cull = 0.0
+    Enk_previous_accum = 0.0
+
+    a_sample = (2 * radius) / voxel_length
+
+    ray_index = 0
+    for r in rays:
+        first: particle = None
+        nearest: particle = None
+        hit_depth = float_info.max
+
+        # This is what we do instead of moving meshlets behind a certain depth into the occluded class:
+        # We take a per pixel decision by clipping rays cast at t_max = t_cull if the culling confidence in sufficient.
+        if C_cull > 0.8:
+            t_max = t_cull
+
+        # ray cast
+        too_deep = False
+        for p in particles:
+            if p.does_intersect(r):
+                t = p.intersect(r)
+
+                # clip ray at t_max
+                if t > t_max:
+                    too_deep = True
+                    continue
+
+                if first == None:
+                    first = p
+                    nearest = p
+                if hit_depth > t:
+                    nearest = p
+                    hit_depth = t
+
+        # handle hit
+        if first == None:
+            print(f"{ray_index} | ray {r} hit nothing{': too deep' if too_deep else ''}")
+            hit_sequence_depth_probabilistic.append(np.nan)
+            if too_deep:
+                rays_culled_probabilistic +=1
+            else:
+                rays_that_miss_probilistic += 1
+        else:
+            rays_that_hit_probabilistic += 1
+            hit_sequence.append(nearest)
+            hit_sequence_depth_probabilistic.append(hit_depth)
+            print(f"{ray_index} | ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+
+            B_tmin = particle_count_between_depths(0.0, t_max)
+            B_tsample = particle_count_between_depths(hit_depth, t_max)
+            B_tcull = particle_count_between_depths(t_cull, t_max)
+            B_taccum = particle_count_between_depths(t_accum, t_max)
+
+
+
+            # Estimate of #particles we can hit with a ray cast out of this pixel's footprint
+            N = max(1.0, B_tmin)
+
+            #print(f"{rays_that_hit_probabilistic} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
+            print("%i | N= %.4f, t_max= %.2e, t_sample= %.4f, B_tsample= %.4f, t_cull= %.2e, C_cull= %.4f, B_tcull= %.4f, t_accum= %.2e, C_accum = %.4f, B_taccum= %.4f"
+                  % (ray_index,N,t_max,hit_depth,B_tsample, t_cull, C_cull, B_tcull, t_accum, C_accum, B_taccum))
+
+            # Algorithm 1:
+            if hit_depth <= t_cull:
+                Enk_cull = expected_number_of_unique_particles(max(1.0, B_tmin - B_tcull), k_cull)
+                delta_Enk_cull = Enk_cull - Enk_previous_cull
+                C_cull = accumulate_confidence(C_cull, a_sample, delta_Enk_cull)
+                k_cull += 1
+                Enk_previous_cull = Enk_cull
+
+            if hit_depth <= t_accum:
+                accProb = acceptance_probability(C_accum, B_taccum, B_tsample, B_tmin, a_sample)
+                if random.random() <= accProb and hit_depth < t_accum:
+                    t_accum = hit_depth
+                    C_accum = a_sample
+                    Enk_previous_accum = 0.0
+                    k_accum = 1
+                else:
+                    Enk_accum = expected_number_of_unique_particles(max(1.0, B_tmin - B_taccum), k_accum)
+                    delta_Enk_accum = Enk_accum - Enk_previous_accum
+                    C_accum = accumulate_confidence(C_accum, a_sample, delta_Enk_accum)
+                    k_accum += 1
+                    Enk_previous_accum = Enk_accum
+
+            if B_taccum * C_accum > B_tcull * C_cull:
+                C_cull = C_accum
+                t_cull = t_accum
+                k_cull = k_accum
+                Enk_previous_cull = Enk_previous_accum
+
+        ray_index += 1
+
+    print(f"out of {num_rays} rays, {rays_that_hit_probabilistic} hit something.")
+    useful_particles_probabilistic = list(set([p for p in hit_sequence]))
+    print(
+        f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_probabilistic)} different particles.")
+
+    # what is the dataset "front"
+    render_dataset(useful_particles_probabilistic, "hit particles (probabilistic)")
+
+    # what kind of depths did we hit, and when?
+    plt.figure()
+    #plt.plot([p.z for p in hit_sequence])
+    plt.plot([d for d in hit_sequence_depth_probabilistic], 'o')
+    plt.xlabel('ray #')
+    plt.ylabel('nearest hit')
+    if use_vanilla_raycasting:
+        plt.gca().set_ylim([depth_seq_min, depth_seq_max])
+    plt.title('Depth sequence of nearest hits (probabilistic)')
+    plt.show(block=False)
+
+plt.figure()
 plt.xlabel('ray #')
 plt.ylabel('nearest hit')
-plt.title('Depth sequence of nearest hits (normal raycasting)')
+plt.plot([d for d in hit_sequence_depth_probabilistic], 'o', label=f'probabilistic: {len(useful_particles_probabilistic)} particles, {rays_that_hit_probabilistic} hits, {rays_culled_probabilistic} culled, {rays_that_miss_probilistic} misses')
+plt.plot([d for d in hit_sequence_depth_vanilla], 'x', label=f'vanilla: {len(useful_particles_vanilla)} particles, {rays_that_hit_vanilla} hits, {num_rays - rays_that_hit_vanilla} misses')
+plt.gca().legend()
+plt.title('combined depth sequence')
 plt.show()
-
-# other approaches
