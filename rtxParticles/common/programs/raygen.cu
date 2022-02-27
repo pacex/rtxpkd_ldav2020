@@ -86,8 +86,8 @@ namespace pkd {
 #pragma region Density
 
       inline __device__ int voxelIndex(const RayGenData& self, vec3i voxel) {
-          int n = int(self.densityContextBuffer[2].x);
-          return n * n * max(min(voxel.x, n-1), 0) + n * max(min(voxel.y, n-1), 0) + max(min(voxel.z, n-1), 0);
+          vec3i voxelCount = vec3i(self.densityContextBuffer[2]);
+          return voxelCount.y * voxelCount.z * max(min(voxel.x, voxelCount.x-1), 0) + voxelCount.z * max(min(voxel.y, voxelCount.y-1), 0) + max(min(voxel.z, voxelCount.z-1), 0);
       }
 
       inline __device__ float getDensity(const RayGenData& self, vec3f pos) {
@@ -95,17 +95,19 @@ namespace pkd {
           vec3f lowerBound = self.densityContextBuffer[0];
           vec3f upperBound = self.densityContextBuffer[1];
           vec3f boundSize = upperBound - lowerBound;
-          int n = int(self.densityContextBuffer[2].x);
-          float h = 1.0f / self.densityContextBuffer[2].x;
+          vec3i voxelCount = vec3i(self.densityContextBuffer[2]);
+          vec3f h = vec3f(1.0f / voxelCount.x, 1.0f / voxelCount.y, 1.0f / voxelCount.z);
 
 
           vec3f relPos = pos - lowerBound;
           relPos.x /= boundSize.x;
           relPos.y /= boundSize.y;
           relPos.z /= boundSize.z;
-          relPos *= n;
+          relPos.x *= voxelCount.x;
+          relPos.y *= voxelCount.y;
+          relPos.z *= voxelCount.z;
 
-          relPos -= vec3f(0.5f * h, 0.5f * h, 0.5f * h);
+          relPos -= 0.5f * h;
           relPos.x = fmaxf(0.0f, relPos.x);
           relPos.y = fmaxf(0.0f, relPos.y);
           relPos.z = fmaxf(0.0f, relPos.z);

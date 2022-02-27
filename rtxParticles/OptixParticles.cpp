@@ -141,29 +141,39 @@ namespace pkd {
 
         box3f bounds = model->getBounds();
         vec3f boundsSize = bounds.upper - bounds.lower;
+
+        vec3i voxelCount;
+        if (boundsSize.x < boundsSize.y && boundsSize.x < boundsSize.z) 
+            voxelCount = vec3i(n, float(n) * (boundsSize.y / boundsSize.x), float(n) * (boundsSize.z / boundsSize.x));
+        else if (boundsSize.y < boundsSize.x && boundsSize.y < boundsSize.z)
+            voxelCount = vec3i(float(n) * (boundsSize.x / boundsSize.y), n,  float(n) * (boundsSize.z / boundsSize.y));
+        else
+            voxelCount = vec3i(float(n) * (boundsSize.x / boundsSize.z), float(n) * (boundsSize.y / boundsSize.z), n);
+        
+        std::cout << "building density field: " << voxelCount.x << " x " << voxelCount.y << " x " << voxelCount.z << std::endl;
         /*
         std::cout << "Bounds size:" << std::endl;
         printf("%6.4lf", length(boundsSize));
         std::cout << std::endl;*/
-        vec3f cellSize = boundsSize / float(n);
+        vec3f cellSize = vec3f(boundsSize.x / voxelCount.x, boundsSize.y / voxelCount.y, boundsSize.z / voxelCount.z);
         float cellVolume = cellSize.x * cellSize.y * cellSize.z;
 
         std::vector<vec3f> densityContext {
             bounds.lower,
             bounds.upper,
-            vec3f(float(n))
+            vec3f(voxelCount.x, voxelCount.y, voxelCount.z)
         };
 
         densityContextBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(densityContext[0]), densityContext.size(), densityContext.data());
         owlRayGenSetBuffer(rayGen, "densityContextBuffer", densityContextBuffer);
 
-        std::vector<float> particleDensity(n * n * n, 0);
+        std::vector<float> particleDensity(voxelCount.x * voxelCount.y * voxelCount.z, 0);
 
         for (int i = 0; i < model->particles.size(); i++) {
             Particle& p = model->particles[i];
             vec3f relPos = p.pos - bounds.lower;
-            vec3i voxelPos = vec3i(int(floor(n * relPos.x / boundsSize.x)), int(floor(n * relPos.y / boundsSize.y)), int(floor(n * relPos.z / boundsSize.z)));
-            particleDensity[n * n * voxelPos.x + n * voxelPos.y + voxelPos.z] += 1.0f;
+            vec3i voxelPos = vec3i(int(floor(voxelCount.x * relPos.x / boundsSize.x)), int(floor(voxelCount.y * relPos.y / boundsSize.y)), int(floor(voxelCount.z * relPos.z / boundsSize.z)));
+            particleDensity[voxelCount.y * voxelCount.z * voxelPos.x + voxelCount.z * voxelPos.y + voxelPos.z] += 1.0f;
         }
         
         for (int i = 0; i < particleDensity.size(); i++) {
