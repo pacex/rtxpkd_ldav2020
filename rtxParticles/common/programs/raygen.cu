@@ -319,7 +319,7 @@ namespace pkd {
           float mean = float(N) * p;
           float var = float(N) * p * (1.0f - p);
 
-          return 1.0f - normalCdf(self, (float(k) - 0.5f - mean) / sqrt(var));
+          return 1.0f - normalCdf(self, (float(k) + 0.5f - mean) / sqrt(var));
       }
 
       inline __device__ float acceptanceProbability(const RayGenData& self, const int& pixelIdx,
