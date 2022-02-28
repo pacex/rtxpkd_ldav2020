@@ -106,7 +106,7 @@ namespace pkd {
           relPos.x *= voxelCount.x;
           relPos.y *= voxelCount.y;
           relPos.z *= voxelCount.z;
-
+          /*
           relPos -= 0.5f * h;
           relPos.x = fmaxf(0.0f, relPos.x);
           relPos.y = fmaxf(0.0f, relPos.y);
@@ -124,8 +124,8 @@ namespace pkd {
 
           float yxInterp0 = mix(xInterp00, xInterp10, fract(relPos.y));
           float yxInterp1 = mix(xInterp01, xInterp11, fract(relPos.y));
-
-          return mix(yxInterp0, yxInterp1, fract(relPos.z));
+          */
+          return self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z)))];
           
       }
 
@@ -168,17 +168,12 @@ namespace pkd {
 
               for (float t = t0; t < t1; t += step) {
                   
-                  float t_next = t + step;
+                  float t_next = min(t + step, t1);
 
-                  float localDensity = getDensity(self, ray.origin + (t + 0.5f * step) * ray.direction);
-
-                  if (t_next > t1) {
-                      localDensity *= (t1 - t) / step;
-                  }
-                  
+                  float localDensity = getDensity(self, ray.origin + (t + 0.5f * step) * ray.direction);                 
 
                   if (t >= d_sample) {
-                      B_d_sample += localDensity;
+                      B_d_sample += localDensity * ((t_next - t) / step);
                   }
                   else if (t_next >= d_sample) {
                       B_d_sample += ((t_next - d_sample) / step) * localDensity;
@@ -186,7 +181,7 @@ namespace pkd {
                   
 
                   if (t >= d_cull) {
-                      B_d_cull += localDensity;
+                      B_d_cull += localDensity * ((t_next - t) / step);
                   }
                   else if (t_next >= d_cull) {
                       B_d_cull += ((t_next - d_cull) / step) * localDensity;
@@ -194,14 +189,14 @@ namespace pkd {
                   
 
                   if (t >= d_accum) {
-                      B_d_accum += localDensity;
+                      B_d_accum += localDensity * ((t_next - t) / step);
                   }
                   else if (t_next >= d_accum) {
                       B_d_accum += ((t_next - d_accum) / step) * localDensity;
                   }
                   
 
-                  B_d_min += localDensity;
+                  B_d_min += localDensity * ((t_next - t) / step);
 
               }
 
@@ -209,69 +204,8 @@ namespace pkd {
               B_d_cull *= pixel_footprint * step;
               B_d_accum *= pixel_footprint * step;
               B_d_min *= pixel_footprint * step;
-
-              /*
-              for (float t = t0 + 0.5f * step; t < t1; t += step) {
-                  if (!past_d_sample && t > d_sample) {
-                      d_sample_partCount = sum * step * pixel_footprint
-                          + getDensity(self, ray.origin + d_sample * ray.direction) * (t - d_sample) * pixel_footprint;
-                      past_d_sample = true;
-                  }
-
-                  if (!past_d_cull && t > d_cull) {
-                      d_cull_partCount = sum * step * pixel_footprint
-                          + getDensity(self, ray.origin + d_cull * ray.direction) * (t - d_cull) * pixel_footprint;
-                      past_d_cull = true;
-                  }
-
-                  if (!past_d_accum && t > d_accum) {
-                      d_accum_partCount = sum * step * pixel_footprint
-                          + getDensity(self, ray.origin + d_accum * ray.direction) * (t - d_accum) * pixel_footprint;
-                      past_d_accum = true;
-                  }
-
-                  sum += getDensity(self, ray.origin + t * ray.direction);
-                  t_last = t;
-              }
-              sum *= step * pixel_footprint;
-              sum += getDensity(self, ray.origin + t1 * ray.direction) * (t1 - t_last) * pixel_footprint;
-
-              B_d_min = sum;
-              B_d_sample = B_d_min - d_sample_partCount;
-              B_d_cull = B_d_min - d_cull_partCount;
-              B_d_accum = B_d_min - d_accum_partCount;
-              */
           }
           return B_d_min;
-#pragma region old    
-          /*
-          box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
-
-          float sum = 0.0f;
-          
-          float t0, t1;
-          if (clipToBounds(ray, bounds, t0, t1)) {
-
-              t0 = max(t0, d_min);
-              t1 = min(t1, d_max);
-
-              const FrameState* fs = &self.frameStateBuffer[0];
-
-              float step = step_relative * length(bounds.upper - bounds.lower);
-              float pixel_footprint = length(cross(fs->camera_screen_du, fs->camera_screen_dv));
-
-              float t_last = t0;
-              for (float t = t0; t < t1; t += step) {
-                  sum += getDensity(self, ray.origin + t * ray.direction);
-                  t_last = t;
-              }
-              sum *= step * pixel_footprint;
-
-              sum += getDensity(self, ray.origin + t1 * ray.direction) * (t1 - t_last) * pixel_footprint;
-          }
-          return sum;
-          */
-#pragma endregion
       }
 
 #pragma endregion
@@ -507,8 +441,6 @@ namespace pkd {
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
             float a_sample = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
-
-
 
 
             // Density Histogram Integration
