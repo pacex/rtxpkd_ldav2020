@@ -44,7 +44,7 @@ namespace pkd {
 
     virtual void buildModel(Model::SP model, bool override_model = false) = 0;
 
-    void buildDensityField(Model::SP model, int n);
+    void buildDensityField(Model::SP model);
 
     void calculateNormalCdf();
     
@@ -87,8 +87,10 @@ namespace pkd {
     OWLBuffer densityBuffer = 0;
     OWLBuffer densityContextBuffer = 0;
     OWLBuffer normalCdfBuffer = 0;
+    OWLBuffer accumIDLastCulled = 0;
 
     static int rec_depth;
+    static int voxel_count;
     static float radius;
   };
 

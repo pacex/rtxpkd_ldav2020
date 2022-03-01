@@ -30,6 +30,7 @@ namespace pkd {
     using device::RayGenData;
 
     int OptixParticles::rec_depth = 3;
+    int OptixParticles::voxel_count = 64;
 
     OptixParticles::OptixParticles()
     {
@@ -81,6 +82,7 @@ namespace pkd {
           { "world",           OWL_GROUP,  OWL_OFFSETOF(RayGenData,world)},
           { "rec_depth",       OWL_INT,    OWL_OFFSETOF(RayGenData,rec_depth)},
           { "radius",       OWL_FLOAT,    OWL_OFFSETOF(RayGenData,radius)},
+          { "accumIDLastCulled",       OWL_BUFPTR,    OWL_OFFSETOF(RayGenData,accumIDLastCulled)},
           { "densityBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityBuffer)},
           { "densityContextBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityContextBuffer)},
           { "normalCdfBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalCdfBuffer)},
@@ -95,6 +97,8 @@ namespace pkd {
 
         std::cout << "Setting rec depth: " << rec_depth << std::endl;
         owlRayGenSet1i(rayGen, "rec_depth", rec_depth);
+        accumIDLastCulled = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "accumIDLastCulled", accumIDLastCulled);
         owlRayGenSetBuffer(rayGen, "frameStateBuffer", frameStateBuffer);
 
         resizeFrameBuffer(vec2i(100));
@@ -102,7 +106,7 @@ namespace pkd {
 
     void OptixParticles::setModel(Model::SP model, bool override_model)
     {
-        buildDensityField(model, 64);
+        buildDensityField(model);
         calculateNormalCdf();
 
         buildModel(model, override_model);
@@ -137,10 +141,10 @@ namespace pkd {
         owlRayGenSetBuffer(rayGen, "normalCdfBuffer", normalCdfBuffer);
     }
 
-    void OptixParticles::buildDensityField(Model::SP model, int n) {
-
+    void OptixParticles::buildDensityField(Model::SP model) {
         box3f bounds = model->getBounds();
         vec3f boundsSize = bounds.upper - bounds.lower;
+        int n = OptixParticles::voxel_count;
 
         vec3i voxelCount;
         if (boundsSize.x < boundsSize.y && boundsSize.x < boundsSize.z) 
@@ -151,10 +155,7 @@ namespace pkd {
             voxelCount = vec3i(float(n) * (boundsSize.x / boundsSize.z), float(n) * (boundsSize.y / boundsSize.z), n);
         
         std::cout << "building density field: " << voxelCount.x << " x " << voxelCount.y << " x " << voxelCount.z << std::endl;
-        /*
-        std::cout << "Bounds size:" << std::endl;
-        printf("%6.4lf", length(boundsSize));
-        std::cout << std::endl;*/
+
         vec3f cellSize = vec3f(boundsSize.x / voxelCount.x, boundsSize.y / voxelCount.y, boundsSize.z / voxelCount.z);
         float cellVolume = cellSize.x * cellSize.y * cellSize.z;
 
@@ -171,6 +172,9 @@ namespace pkd {
 
         for (int i = 0; i < model->particles.size(); i++) {
             Particle& p = model->particles[i];
+
+            // TODO: splat particles into voxels correctly
+
             vec3f relPos = p.pos - bounds.lower;
             vec3i voxelPos = vec3i(int(floor(voxelCount.x * relPos.x / boundsSize.x)), int(floor(voxelCount.y * relPos.y / boundsSize.y)), int(floor(voxelCount.z * relPos.z / boundsSize.z)));
             particleDensity[voxelCount.y * voxelCount.z * voxelPos.x + voxelCount.z * voxelPos.y + voxelPos.z] += 1.0f;

@@ -364,8 +364,12 @@ namespace pkd {
         owl::viewer::GlutWindow::initGlut(argc, argv);
 
         std::string sceneFileName = "";
+
         int spp = 1;
         float c_occ = 0.95f;
+        int voxelCount = 64;
+        int convIter = 128;
+        int nBudget = 25;
         bool debug = false;
 
         bool dumpModel = false;
@@ -504,6 +508,15 @@ namespace pkd {
             else if (arg == "--c_occ") {
                 c_occ = std::atof(argv[++i]);
             }
+            else if (arg == "--voxel-count") {
+                OptixParticles::voxel_count = std::atof(argv[++i]);
+            }
+            else if (arg == "--n-budget") {
+                nBudget = std::atof(argv[++i]);
+            }
+            else if (arg == "--conv-iter") {
+                convIter = std::atof(argv[++i]);
+            }
             else if (arg == "--debug") {
                 debug = true;
             }
@@ -569,6 +582,8 @@ namespace pkd {
         widget.frameState.samplesPerPixel = spp;
         widget.frameState.c_occ = c_occ;
         widget.frameState.debugOutput = debug;
+        widget.frameState.convergenceIterations = convIter;
+        widget.frameState.nBudget = nBudget;
 
         box3f sceneBounds = particles->getBounds();
         widget.enableInspectMode();

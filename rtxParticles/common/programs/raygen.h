@@ -26,6 +26,7 @@ namespace pkd {
       int deviceCount;
       OptixTraversableHandle world;
       int       rec_depth;
+      int*      accumIDLastCulled;
       float     radius;
       vec2ui    fbSize;
       uint32_t *colorBufferPtr;

@@ -257,7 +257,7 @@ namespace pkd {
       }
 
       inline __device__ float acceptanceProbability(const RayGenData& self, const float C_accum,
-          const float B_d_accum, const float B_d_sample, const float B_d_min, const float a) {
+          const float B_d_accum, const float B_d_sample, const float B_d_min, const float a, const int N_budget) {
           
           int n_ds = minUniqueParticles(B_d_accum, B_d_sample, C_accum, a);
 
@@ -278,7 +278,6 @@ namespace pkd {
           /* Equation (22) */
           float p_ds = D_d_min_d_sample / B_d_min;
 
-          int N_budget = 25;
           
           return approximateBernoulliCdf(self, N_budget, k_ds, p_ds);
       }
@@ -383,7 +382,7 @@ namespace pkd {
       const FrameState *fs = &self.frameStateBuffer[0];
       int pixel_index = pixelID.y * launchDim.x + pixelID.x;
 
-      
+      self.accumIDLastCulled[0] = min(self.accumIDLastCulled[0], fs->accumID);
 
       //Accumulate color and normal across multiple samples
       vec4f col(0.f);
@@ -396,19 +395,16 @@ namespace pkd {
 
       //DEBUG
 #pragma region DEBUG
-      if (pixelIdx == 0 && fs->accumID == 0) {
-          /*
-          for (int i = 0; i <= 52; i++) {
-              float P = approximateBernoulliCdf(self, 52, i, 0.42f);
-
-              printf("%i | %f\n", i, P);
-          }*/
+      if (pixelIdx == 0) {
+          //printf("%i\n", self.accumIDLastCulled[0]);
       }
 #pragma endregion
 
       //Culling by using depth as t_max
-      if (fs->probabilisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
+      if (fs->probabilisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ
+          && self.confidentDepthBufferPtr[pixelIdx] > self.depthConfidenceCullBufferPtr[pixelIdx].x) {
           self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
+          self.accumIDLastCulled[0] = fs->accumID;
       }
 
       owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f,
@@ -436,7 +432,8 @@ namespace pkd {
         norm += vec4f(Normal, 0.f);
 
         //Depth Confidence Accumulation
-        if (fs->probabilisticCulling && prd.particleID != -1 && fs->accumID > 0) {
+        if (fs->probabilisticCulling && prd.particleID != -1 && fs->accumID > 0
+            && fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[0]) <= fs->convergenceIterations) {
             float d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
@@ -451,7 +448,7 @@ namespace pkd {
                 B_d_min, B_d_sample, B_d_cull, B_d_accum);
             
 
-            float accProb = acceptanceProbability(self, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, B_d_sample, B_d_min, a_sample);
+            float accProb = acceptanceProbability(self, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, B_d_sample, B_d_min, a_sample, fs->nBudget);
 
             // DEBUG OUTPUT
             if (fs->debugOutput && pixelIdx == debugPixelIdx) {
