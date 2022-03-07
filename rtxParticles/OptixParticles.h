@@ -26,6 +26,7 @@
 // ours
 #include "rtxParticles/common/Particles.h"
 #include "rtxParticles/common/programs/FrameState.h"
+#include "DensityVolume.h"
 
 #include <chrono>
 #include <queue>
@@ -43,8 +44,6 @@ namespace pkd {
     void setModel(Model::SP model, bool override_model = false);
 
     virtual void buildModel(Model::SP model, bool override_model = false) = 0;
-
-    void buildDensityField(Model::SP model);
 
     void calculateNormalCdf();
     
@@ -92,6 +91,8 @@ namespace pkd {
     static int rec_depth;
     static int voxel_count;
     static float radius;
+
+    DensityVolume densityVolume;
   };
 
 }
