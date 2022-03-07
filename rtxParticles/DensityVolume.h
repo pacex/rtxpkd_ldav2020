@@ -19,7 +19,7 @@ namespace pkd {
     private:
         static float gauss(float x, float mu, float sigma);
         static box3i getBoundingVoxels(const Particle p, const float radius, const box3f bounds, const vec3i voxelCount);
-        static float getOverlap(const Particle p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount);
+        static float getOverlap(const Particle p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount, const float integratedGauss[], const int nGauss);
         static vec3f getVoxelLower(const vec3i voxel, const box3f bounds, const vec3i voxelCount);
         static vec3f getVoxelUpper(const vec3i voxel, const box3f bounds, const vec3i voxelCount);
 

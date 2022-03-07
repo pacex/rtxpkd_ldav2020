@@ -51,17 +51,21 @@ namespace pkd {
     }
 
     /* How much volume of the particle is also inside the given voxel? */
-    float DensityVolume::getOverlap(const Particle p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount) {
+    float DensityVolume::getOverlap(const Particle p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount, const float integratedGauss[], int nGauss) {
         vec3f posLower = p.pos - vec3f(radius);
         vec3f posUpper = p.pos + vec3f(radius);
 
         vec3f voxelLower = getVoxelLower(voxel, bounds, voxelCount);
         vec3f voxelUpper = getVoxelUpper(voxel, bounds, voxelCount);
 
+        vec3f linearOverlap = vec3f((min(voxelUpper.x, posUpper.x) - max(voxelLower.x, posLower.x)) / (2.0f * radius),
+            (min(voxelUpper.y, posUpper.y) - max(voxelLower.y, posLower.y)) / (2.0f * radius),
+            (min(voxelUpper.z, posUpper.z) - max(voxelLower.z, posLower.z)) / (2.0f * radius));
+
         // Still not clear yet if this is legal?
-        return (min(voxelUpper.x, posUpper.x) - max(voxelLower.x, posLower.x)) / (2.0f * radius)
-            * (min(voxelUpper.y, posUpper.y) - max(voxelLower.y, posLower.y)) / (2.0f * radius)
-            * (min(voxelUpper.z, posUpper.z) - max(voxelLower.z, posLower.z)) / (2.0f * radius);
+        return integratedGauss[min(int(linearOverlap.x * nGauss), nGauss - 1)]
+            * integratedGauss[min(int(linearOverlap.y * nGauss), nGauss - 1)]
+            * integratedGauss[min(int(linearOverlap.z * nGauss), nGauss - 1)];
     }
 
     void DensityVolume::buildDensityField(Model::SP model, const int n) {
@@ -92,7 +96,7 @@ namespace pkd {
         particleDensity = std::vector<float>(voxelCount.x * voxelCount.y * voxelCount.z, 0);
 
         // Integrated gauss lookup table
-        const int nGauss = 64;
+        const int nGauss = 256;
         const float zAlpha = 1.5f;
         const float mu = 0.0f;
         const float sigma = 0.44f;
@@ -115,8 +119,8 @@ namespace pkd {
                 for (int y = boundingVoxels.lower.y; y <= boundingVoxels.upper.y; y++) {
                     for (int z = boundingVoxels.lower.z; z <= boundingVoxels.upper.z; z++) {
                         vec3i voxel = vec3i(x, y, z);
-                        float overlap = getOverlap(p, model->radius, voxel, bounds, voxelCount);
-                        particleDensity[voxelCount.y * voxelCount.z * voxel.x + voxelCount.z * voxel.y + voxel.z] += integratedGauss[max(int(overlap * nGauss - 0.5f), 0)];
+                        float overlap = getOverlap(p, model->radius, voxel, bounds, voxelCount, integratedGauss, nGauss);
+                        particleDensity[voxelCount.y * voxelCount.z * voxel.x + voxelCount.z * voxel.y + voxel.z] += overlap;
                     }
                 }
             }
