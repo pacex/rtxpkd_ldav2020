@@ -24,6 +24,7 @@ num_voxels = 16
 particle_offset = 3 * (dataset_length / num_voxels)
 use_vanilla_raycasting = True
 use_probabilistic_culling = True
+use_splatting = False
 N_budget = 25
 
 voxel_length = dataset_length / num_voxels
@@ -106,6 +107,11 @@ class particle:
     # along the lines of separable kernels, can we just compute the two 1D
     # overlaps and then multiply the respective "portions" of the pre-integration?
     def splat(self, voxel_density):
+
+        if not use_splatting:
+            voxel_density[self.voxel_center] += 1
+            return
+
         for idx in range(self.voxel_min, self.voxel_max + 1):
             print(f"splat: [{self.y}, {self.z}] rad {self.r}:")
 
