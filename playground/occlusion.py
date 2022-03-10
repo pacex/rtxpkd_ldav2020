@@ -15,17 +15,23 @@ from sys import float_info
 # parameters
 dataset_offset = 1
 dataset_length = 25
-num_particles = 500
+num_particles = 1000
 num_rays = 1000
-radius = 0.08
+radius = 0.02
 gauss_stepping = 0.05
 random.seed(42)
 num_voxels = 16
+particle_offset = 3 * (dataset_length / num_voxels)
 use_vanilla_raycasting = True
 use_probabilistic_culling = True
 N_budget = 25
 
 voxel_length = dataset_length / num_voxels
+
+# Keep particle density independent of particle offset
+num_particles = int(num_particles * (dataset_length - particle_offset) / dataset_length)
+num_particles = max(num_particles, 0)
+
 
 # Accelerate splatting: Sample 1D gauss kernel, then integrate the samples.
 # Then we could find the splat contribution by just computing the overlap of the splat and the voxel
@@ -132,7 +138,7 @@ class particle:
 
 # generate particles
 for i in range(num_particles):
-    z = random.random() * dataset_length + dataset_offset
+    z = random.random() * (dataset_length - particle_offset) + dataset_offset + particle_offset
     y = random.random() * voxel_length
     particles.append(particle(y, z, radius))
 
@@ -454,7 +460,7 @@ if use_probabilistic_culling:
 plt.figure()
 plt.xlabel('ray #')
 plt.ylabel('nearest hit')
-plt.plot([d for d in hit_sequence_depth_probabilistic], 'o', label=f'probabilistic: {len(useful_particles_probabilistic)} particles, {rays_that_hit_probabilistic} hits, {rays_culled_probabilistic} culled, {rays_that_miss_probilistic} misses')
+plt.plot([d for d in hit_sequence_depth_probabilistic], 'o', label=f'probabilistic: {len(useful_particles_probabilistic)} particles, {rays_that_hit_probabilistic} hits, {rays_culled_probabilistic} (wrongly) culled, {rays_that_miss_probilistic} misses')
 plt.plot([d for d in hit_sequence_depth_vanilla], 'x', label=f'vanilla: {len(useful_particles_vanilla)} particles, {rays_that_hit_vanilla} hits, {num_rays - rays_that_hit_vanilla} misses')
 plt.gca().legend()
 plt.title('combined depth sequence')

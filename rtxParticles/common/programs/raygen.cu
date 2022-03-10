@@ -283,9 +283,6 @@ namespace pkd {
       }
 #pragma endregion
 
-
-
-
 #pragma region TraceRay
       inline __device__ vec3f traceRay(const RayGenData& self,
           owl::Ray& ray, Random& rnd, PerRayData& prd)
@@ -372,7 +369,7 @@ namespace pkd {
       if (pixelID.x >= self.fbSize.x) return;
       if (pixelID.y >= self.fbSize.y) return;
       const int pixelIdx = pixelID.x+self.fbSize.x*pixelID.y;
-      const int debugPixelIdx = 364383 - 150 * self.fbSize.x;
+      const int debugPixelIdx = int(0.5f * self.fbSize.x + 0.44f * self.fbSize.y * self.fbSize.x);
 
       // for multi-gpu: only render every deviceCount'th column of 32 pixels:
       if (((pixelID.x/32) % self.deviceCount) != self.deviceIndex)
@@ -395,14 +392,15 @@ namespace pkd {
 
       //DEBUG
 #pragma region DEBUG
-      if (pixelIdx == 0) {
-          //printf("%i\n", self.accumIDLastCulled[0]);
+      if (pixelIdx == debugPixelIdx && fs->accumID == 0) {
+          //printf("a = %f\n", min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f));
       }
 #pragma endregion
 
       //Culling by using depth as t_max
       if (fs->probabilisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ
           && self.confidentDepthBufferPtr[pixelIdx] > self.depthConfidenceCullBufferPtr[pixelIdx].x) {
+
           self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
           self.accumIDLastCulled[0] = fs->accumID;
       }
@@ -447,6 +445,11 @@ namespace pkd {
                 d_sample, d_cull, d_accum,
                 B_d_min, B_d_sample, B_d_cull, B_d_accum);
             
+            /*
+            if (pixelIdx == debugPixelIdx && fs->accumID == 1) {
+                printf("r = %f\n", self.radius / length(fs->camera_screen_du));
+                printf("B_d_min = %f\n", B_d_min);
+            }*/
 
             float accProb = acceptanceProbability(self, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, B_d_sample, B_d_min, a_sample, fs->nBudget);
 
@@ -545,7 +548,7 @@ namespace pkd {
       self.accumBufferPtr[pixelIdx] = col;
       self.normalAccumBufferPtr[pixelIdx] = norm;
 
-      if (fs->probabilisticCulling && fs->debugOutput && pixelIdx == 364383) {
+      if (fs->probabilisticCulling && fs->debugOutput && pixelIdx == debugPixelIdx) {
           vec4f c = col / (fs->accumID + 1.f);
           printf("(%f)\n", (c.x + c.y + c.z) / 3.0f);
       }
@@ -557,6 +560,16 @@ namespace pkd {
       //Debug
       if (fs->debugOutput && pixelIdx == debugPixelIdx) {
           rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 1.0f, 1.0f));
+      }
+      if (fs->probabilisticCulling && pixelID.x < 10 && pixelID.y < 10) {
+          if (fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[0]) > fs->convergenceIterations) {
+              //Converged
+              rgba_col = make_rgba8(vec4f(0.0f, 1.0f, 0.0f, 1.0f));
+          }
+          else {
+              //Not Converged
+              rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 0.0f, 1.0f));
+          }
       }
       //self.normalBufferPtr[pixelIdx] = rgba_norm;
       float a, b, c, d;

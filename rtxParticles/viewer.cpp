@@ -222,7 +222,7 @@ namespace pkd {
                 if (fps == 0.f)
                     fps = thisFPS;
                 else
-                    fps = 0.9f * fps + 0.1f * thisFPS;
+                    fps = 0.5f * fps + 0.5f * thisFPS;
                 char newTitle[1000];
                 sprintf(newTitle, "rtxPKD (%3.1ffps)", fps);
                 window->setTitle(newTitle);
