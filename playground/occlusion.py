@@ -13,7 +13,7 @@ import math
 from sys import float_info
 
 
-def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.02, seed: int = 42, particle_voxel_offset: float = 0, C_occ: float = 0.95, use_splatting: bool = True, plot: bool = True):
+def simulate(num_particles: int = 2000, num_rays: int = 1000, radius: float = 0.08, seed: int = 42, particle_voxel_offset: float = 0.0, C_occ: float = 0.95, use_splatting: bool = True, plot: bool = True, log: bool = True):
 
     # parameters
     dataset_offset = 1
@@ -31,7 +31,6 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
     N_budget = 25
 
     voxel_length = dataset_length / num_voxels
-
 
     # Accelerate splatting: Sample 1D gauss kernel, then integrate the samples.
     # Then we could find the splat contribution by just computing the overlap of the splat and the voxel
@@ -67,7 +66,8 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
             self.voxel_center = int(dtv_center)
             self.voxel_min = max(0, int(dtv_min))
             self.voxel_max = min(num_voxels - 1, int(dtv_max))
-            print(self.to_string())
+            if log:
+                print(self.to_string())
 
         def to_string(self) -> string:
             return f"particle at ({self.z}, {self.y}), radius {self.r}, in voxel {self.voxel_center}{f' spanning [{self.voxel_min},{self.voxel_max}]' if self.voxel_min != self.voxel_max else ''}"
@@ -76,13 +76,15 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
             new_start = max(coord - self.r, start)
             new_end = min(coord + self.r, end)
             overlap = (new_end - new_start) / (2 * self.r)
-            print(f"[{start},{end}] -> [{new_start},{new_end}] -> overlap {overlap}, ", end='')
+            if log:
+                print(f"[{start},{end}] -> [{new_start},{new_end}] -> overlap {overlap}, ", end='')
             return overlap
 
         def integral_overlap(self, overlap: float) -> float:
             int_overlap = int(overlap * (len(gauss_integral_normalized) - 1))
             int_overlap = max(0, min(int_overlap, len(gauss_integral_normalized)-1))
-            print(f"int_overlap {int_overlap}")
+            if log:
+                print(f"int_overlap {int_overlap}")
             return int_overlap
 
         # along the lines of separable kernels, can we just compute the two 1D
@@ -94,20 +96,24 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
                 return
 
             for idx in range(self.voxel_min, self.voxel_max + 1):
-                print(f"splat: [{self.y}, {self.z}] rad {self.r}:")
+                if log:
+                    print(f"splat: [{self.y}, {self.z}] rad {self.r}:")
 
-                print(f"overlap_h ", end='')
+                if log:
+                    print(f"overlap_h ", end='')
                 overlap_h = self.overlap(self.z, voxel_start(idx), voxel_end(idx))
                 int_overlap_h = self.integral_overlap(overlap_h)
 
-                print(f"overlap_v ", end='')
+                if log:
+                    print(f"overlap_v ", end='')
                 overlap_v = self.overlap(self.y, 0, voxel_length)
                 int_overlap_v = self.integral_overlap(overlap_v)
 
                 fraction_h = gauss_integral_normalized[int_overlap_h]
                 fraction_v = gauss_integral_normalized[int_overlap_v]
                 gauss = fraction_h * fraction_v # is that legal and correct?
-                print(f"fraction_h {fraction_h}, fraction_v {fraction_v} -> gauss {gauss}")
+                if log:
+                    print(f"fraction_h {fraction_h}, fraction_v {fraction_v} -> gauss {gauss}")
                 voxel_density[idx] += gauss
 
         def does_intersect(self, ray_y: float) -> bool:
@@ -298,7 +304,8 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
     #     RAY CASTING (VANILLA)
     # =============================
     if use_vanilla_raycasting:
-        print(f"casting {num_rays} rays into {num_particles} particles (vanilla)...")
+        if log:
+            print(f"casting {num_rays} rays into {num_particles} particles (vanilla)...")
         rays_that_hit_vanilla = 0
         hit_sequence = []
         hit_sequence_depth_vanilla = []
@@ -319,12 +326,15 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
                 rays_that_hit_vanilla += 1
                 hit_sequence.append(nearest)
                 hit_sequence_depth_vanilla.append(hit_depth)
-                print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+                if log:
+                    print(f"ray {r} hit {nearest.to_string()} at depth {hit_depth}")
             else:
                 hit_sequence_depth_vanilla.append(np.nan)
-        print(f"out of {num_rays} rays, {rays_that_hit_vanilla} hit something.")
+        if log:
+            print(f"out of {num_rays} rays, {rays_that_hit_vanilla} hit something.")
         useful_particles_vanilla = list(set([p for p in hit_sequence]))
-        print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_vanilla)} different particles.")
+        if log:
+            print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_vanilla)} different particles.")
 
         # what is the dataset "front"
         render_dataset(useful_particles_vanilla, "hit particles (normal raycasting)")
@@ -346,7 +356,8 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
     #     RAY CASTING (PROBABILISTIC CULLING)
     # ===========================================
     if use_probabilistic_culling:
-        print(f"casting {num_rays} rays into {num_particles} particles (using probabilistic culling)...")
+        if log:
+            print(f"casting {num_rays} rays into {num_particles} particles (using probabilistic culling)...")
         rays_that_hit_probabilistic = 0
         rays_that_miss_probilistic = 0
         rays_culled_probabilistic = 0
@@ -397,17 +408,19 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
 
             # handle hit
             if first == None:
-                print(f"{ray_index} | ray {r} hit nothing{': too deep' if too_deep else ''}")
+                if log:
+                    print(f"{ray_index} | ray {r} hit nothing{': too deep' if too_deep else ''}")
                 hit_sequence_depth_probabilistic.append(np.nan)
                 if too_deep:
-                    rays_culled_probabilistic +=1
+                    rays_culled_probabilistic += 1
                 else:
                     rays_that_miss_probilistic += 1
             else:
                 rays_that_hit_probabilistic += 1
                 hit_sequence.append(nearest)
                 hit_sequence_depth_probabilistic.append(hit_depth)
-                print(f"{ray_index} | ray {r} hit {nearest.to_string()} at depth {hit_depth}")
+                if log:
+                    print(f"{ray_index} | ray {r} hit {nearest.to_string()} at depth {hit_depth}")
 
                 B_tmin = particle_count_between_depths(0.0, t_max)
                 B_tsample = particle_count_between_depths(hit_depth, t_max)
@@ -420,8 +433,9 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
                 N = max(1.0, B_tmin)
 
                 #print(f"{rays_that_hit_probabilistic} | N= {N}, t_max= {t_max}, t_sample= {hit_depth}, B_tsample= {B_tsample}, t_cull= {t_cull}, C_cull= {C_cull}, B_tcull= {B_tcull}, t_accum= {t_accum}, C_accum= {C_accum}, B_taccum= {B_taccum}")
-                print("%i | N= %.4f, t_max= %.2e, t_sample= %.4f, B_tsample= %.4f, t_cull= %.2e, C_cull= %.4f, B_tcull= %.4f, t_accum= %.2e, C_accum = %.4f, B_taccum= %.4f"
-                      % (ray_index,N,t_max,hit_depth,B_tsample, t_cull, C_cull, B_tcull, t_accum, C_accum, B_taccum))
+                if log:
+                    print("%i | N= %.4f, t_max= %.2e, t_sample= %.4f, B_tsample= %.4f, t_cull= %.2e, C_cull= %.4f, B_tcull= %.4f, t_accum= %.2e, C_accum = %.4f, B_taccum= %.4f"
+                          % (ray_index,N,t_max,hit_depth,B_tsample, t_cull, C_cull, B_tcull, t_accum, C_accum, B_taccum))
 
                 # Algorithm 1:
                 if hit_depth <= t_cull:
@@ -453,10 +467,11 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
 
             ray_index += 1
 
-        print(f"out of {num_rays} rays, {rays_that_hit_probabilistic} hit something.")
+        if log:
+            print(f"out of {num_rays} rays, {rays_that_hit_probabilistic} hit something.")
         useful_particles_probabilistic = list(set([p for p in hit_sequence]))
-        print(
-            f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_probabilistic)} different particles.")
+        if log:
+            print(f"but (out of {num_particles} total particles) we only actually hit {len(useful_particles_probabilistic)} different particles.")
 
         # what is the dataset "front"
         render_dataset(useful_particles_probabilistic, "hit particles (probabilistic)")
@@ -483,7 +498,7 @@ def simulate(num_particles: int = 1000, num_rays: int = 1000, radius: float = 0.
         plt.title('combined depth sequence')
         plt.show()
 
-    return
+    return rays_culled_probabilistic
 
 
-simulate()
+#simulate()
