@@ -571,9 +571,9 @@ namespace pkd {
               rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 0.0f, 1.0f));
           }
       }
-      //self.normalBufferPtr[pixelIdx] = rgba_norm;
-      float a, b, c, d;
-      self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.0f, 0.0f, 0.0f, a, b, c, d)), 0.0f));
+      self.normalBufferPtr[pixelIdx] = rgba_norm;
+      //float a, b, c, d;
+      //self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.0f, 0.0f, 0.0f, a, b, c, d)), 0.0f));
       
 
       self.colorBufferPtr[pixelIdx] = rgba_col;

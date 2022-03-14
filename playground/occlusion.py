@@ -19,19 +19,16 @@ num_particles = 1000
 num_rays = 1000
 radius = 0.02
 gauss_stepping = 0.05
-random.seed(42)
+random.seed(0)
 num_voxels = 16
-particle_offset = 3 * (dataset_length / num_voxels)
+particle_offset = 1 * (dataset_length / num_voxels)
 use_vanilla_raycasting = True
 use_probabilistic_culling = True
-use_splatting = False
+use_splatting = True
 N_budget = 25
+C_occ = 0.8
 
 voxel_length = dataset_length / num_voxels
-
-# Keep particle density independent of particle offset
-num_particles = int(num_particles * (dataset_length - particle_offset) / dataset_length)
-num_particles = max(num_particles, 0)
 
 
 # Accelerate splatting: Sample 1D gauss kernel, then integrate the samples.
@@ -144,7 +141,9 @@ class particle:
 
 # generate particles
 for i in range(num_particles):
-    z = random.random() * (dataset_length - particle_offset) + dataset_offset + particle_offset
+    z = random.random() * dataset_length + dataset_offset
+    if z < dataset_offset + particle_offset:
+        continue;
     y = random.random() * voxel_length
     particles.append(particle(y, z, radius))
 
@@ -365,7 +364,7 @@ if use_probabilistic_culling:
 
         # This is what we do instead of moving meshlets behind a certain depth into the occluded class:
         # We take a per pixel decision by clipping rays cast at t_max = t_cull if the culling confidence in sufficient.
-        if C_cull > 0.8:
+        if C_cull > C_occ:
             t_max = t_cull
 
         # ray cast
