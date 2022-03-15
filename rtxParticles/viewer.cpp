@@ -51,7 +51,7 @@
 #include <condition_variable>
 #include <fstream>
 
-#define MEASURE_WARMUP_COUNT 20
+#define MEASURE_WARMUP_COUNT 1
 #define MEASURE_FRAME_COUNT 400
 
 
@@ -150,7 +150,7 @@ namespace pkd {
 
             if (measure) {
                 static int g_frameID = 0;
-                int frameID = ++g_frameID;
+                int frameID = g_frameID++;
                 if (frameID == MEASURE_WARMUP_COUNT) {
                     auto const t_start = std::chrono::high_resolution_clock::now();
 
@@ -292,6 +292,12 @@ namespace pkd {
             } break;
             case 'm': {
                 measure = true;
+            } break;
+            case 'M': {
+                measure = true;
+                frameState.probabilisticCulling ^= 1;
+                frameState.accumID = 0;
+                particles.updateFrameState(frameState);
             } break;
             case 'o': {
                 frameState.orthoProjection ^= 1;
