@@ -379,7 +379,7 @@ namespace pkd {
       const FrameState *fs = &self.frameStateBuffer[0];
       int pixel_index = pixelID.y * launchDim.x + pixelID.x;
 
-      self.accumIDLastCulled[0] = min(self.accumIDLastCulled[0], fs->accumID);
+      
 
       //Accumulate color and normal across multiple samples
       vec4f col(0.f);
@@ -397,9 +397,11 @@ namespace pkd {
       }
 #pragma endregion
 
+      self.accumIDLastCulled[0] = min(self.accumIDLastCulled[0], fs->accumID);
+      bool doDepthConfidenceAccum = fs->probabilisticCulling && fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[0]) <= fs->convergenceIterations;
+
       //Culling by using depth as t_max
-      if (fs->probabilisticCulling && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ
-          && self.confidentDepthBufferPtr[pixelIdx] > self.depthConfidenceCullBufferPtr[pixelIdx].x) {
+      if (doDepthConfidenceAccum && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ) {
 
           self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
           self.accumIDLastCulled[0] = fs->accumID;
@@ -412,13 +414,16 @@ namespace pkd {
 
       PerRayData prd;
       
-      for (int s = 0; s < fs->samplesPerPixel; s++) {
+      for (int s = 0; s < fs->samplesPerPixel; s++) { // Iterate over samples
+        // Ray generation
         float u = float(pixelID.x + rnd());
         float v = float(pixelID.y + rnd());
         owl::Ray ray = Camera::generateRay(*fs, u, v, rnd, 1e-6f, self.confidentDepthBufferPtr[pixelIdx]);
+
+        // Color
         col += vec4f(traceRay(self, ray, rnd,prd),1);
 
-        //Normals
+        // Normal
         vec3f Normal(0.f);
         if (prd.particleID != -1) {
             const Particle particle = self.particleBuffer[prd.particleID];
@@ -429,9 +434,8 @@ namespace pkd {
         }
         norm += vec4f(Normal, 0.f);
 
-        //Depth Confidence Accumulation
-        if (fs->probabilisticCulling && prd.particleID != -1 && fs->accumID > 0
-            && fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[0]) <= fs->convergenceIterations) {
+        // Depth Confidence Accumulation
+        if (doDepthConfidenceAccum && prd.particleID != -1 && fs->accumID > 0) {
             float d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
@@ -531,7 +535,7 @@ namespace pkd {
         norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
       }
       else {
-          //Framestate changed -> reset buffers, restart accumulation
+          // Framestate changed -> reset buffers, restart accumulation
           self.depthConfidenceAccumBufferPtr[pixelIdx] = vec4f(1e20f,   // Depth
               0.0f,     // Confidence
               1.0f,     // sample count k
@@ -542,27 +546,30 @@ namespace pkd {
               1.0f,     // sample count k
               0.0f);    // expected number of unique particles E(n(k))
 
-          self.confidentDepthBufferPtr[pixelIdx] = 1e20f;
+          self.confidentDepthBufferPtr[pixelIdx] = 1e20f; // Depth behind which particles get culled
       }
         
       self.accumBufferPtr[pixelIdx] = col;
       self.normalAccumBufferPtr[pixelIdx] = norm;
 
-      if (fs->probabilisticCulling && fs->debugOutput && pixelIdx == debugPixelIdx) {
-          vec4f c = col / (fs->accumID + 1.f);
-          printf("(%f)\n", (c.x + c.y + c.z) / 3.0f);
-      }
 
       uint32_t rgba_col = make_rgba8(col / (fs->accumID + 1.f));
       uint32_t rgba_norm = make_rgba8(abs(norm) / (fs->accumID + 1.f));
       
 
-      //Debug
+      // Debug
       if (fs->debugOutput && pixelIdx == debugPixelIdx) {
-          rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 1.0f, 1.0f));
+          rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 1.0f, 1.0f)); // Visually mark debug pixel
       }
+      if (fs->debugOutput && doDepthConfidenceAccum && pixelIdx == debugPixelIdx) {
+          vec4f c = col / (fs->accumID + 1.f);
+          printf("(%f)\n", (c.x + c.y + c.z) / 3.0f);
+      }
+
+      // Convergence indicator
+      
       if (fs->probabilisticCulling && pixelID.x < 10 && pixelID.y < 10) {
-          if (fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[0]) > fs->convergenceIterations) {
+          if (!doDepthConfidenceAccum) {
               //Converged
               rgba_col = make_rgba8(vec4f(0.0f, 1.0f, 0.0f, 1.0f));
           }
@@ -571,6 +578,7 @@ namespace pkd {
               rgba_col = make_rgba8(vec4f(1.0f, 0.0f, 0.0f, 1.0f));
           }
       }
+
       self.normalBufferPtr[pixelIdx] = rgba_norm;
       //float a, b, c, d;
       //self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(integrateDensityHistogram(self, centerRay, 0.0f, 0.0f, 0.0f, a, b, c, d)), 0.0f));
