@@ -106,6 +106,12 @@ namespace pkd {
 
     void OptixParticles::setModel(Model::SP model, bool override_model)
     {
+        model->particles.erase(std::unique(model->particles.begin(), model->particles.end(),
+            [](auto const& lhs, auto const& rhs) { return lhs.pos == rhs.pos; }),
+            model->particles.end());
+
+        std::cout << "building model: (#particles = " << model->particles.size() << ")" << std::endl;
+
         /* Density Field*/
         DensityVolume::buildDensityField(model, OptixParticles::voxel_count);
 
@@ -134,6 +140,8 @@ namespace pkd {
     void OptixParticles::calculateNormalCdf() {
         float z_alpha = 3.09f;
         int n = 256;
+
+        std::cout << "building normalCDF lookup table: n = " << n << "; z_alpha = " << z_alpha << std::endl;
 
         float step = 2.0f * z_alpha / float(n);
 
