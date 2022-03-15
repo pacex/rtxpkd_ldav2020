@@ -167,7 +167,9 @@ namespace pkd {
                         << " frames in " << duration.count() << "ms" << std::endl;
 
                     printf("AVG_FPS %.1f \n", (MEASURE_FRAME_COUNT / (duration.count() / 1000.0f)));
-                    exit(0);
+                    //exit(0);
+                    measure = false;
+                    g_frameID = 0;
                 }
             }
 
@@ -222,7 +224,7 @@ namespace pkd {
                 if (fps == 0.f)
                     fps = thisFPS;
                 else
-                    fps = 0.5f * fps + 0.5f * thisFPS;
+                    fps = 0.9f * fps + 0.1f * thisFPS;
                 char newTitle[1000];
                 sprintf(newTitle, "rtxPKD (%3.1ffps)", fps);
                 window->setTitle(newTitle);
@@ -287,6 +289,9 @@ namespace pkd {
             case 'n': {
                 renderBuffer++;
                 renderBuffer = renderBuffer % 4;
+            } break;
+            case 'm': {
+                measure = true;
             } break;
             case 'o': {
                 frameState.orthoProjection ^= 1;

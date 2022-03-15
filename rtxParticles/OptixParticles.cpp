@@ -98,8 +98,7 @@ namespace pkd {
 
         std::cout << "Setting rec depth: " << rec_depth << std::endl;
         owlRayGenSet1i(rayGen, "rec_depth", rec_depth);
-        accumIDLastCulled = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
-        owlRayGenSetBuffer(rayGen, "accumIDLastCulled", accumIDLastCulled);
+        
         owlRayGenSetBuffer(rayGen, "frameStateBuffer", frameStateBuffer);
 
         resizeFrameBuffer(vec2i(100));
@@ -161,6 +160,14 @@ namespace pkd {
     void OptixParticles::resizeFrameBuffer(const vec2i& newSize)
     {
         fbSize = newSize;
+
+        //Convergence buffer
+        if (!accumIDLastCulled)
+            accumIDLastCulled = owlHostPinnedBufferCreate(context, OWL_INT, fbSize.x * fbSize.y);
+
+        owlBufferResize(accumIDLastCulled, fbSize.x * fbSize.y);
+        owlRayGenSetBuffer(rayGen, "accumIDLastCulled", accumIDLastCulled);
+
         //AccumBuffer
         if (!accumBuffer)
             accumBuffer = owlDeviceBufferCreate(context, OWL_FLOAT4, fbSize.x * fbSize.y, nullptr);
