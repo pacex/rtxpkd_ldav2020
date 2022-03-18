@@ -448,7 +448,7 @@ def simulate(num_particles: int = 2000, num_rays: int = 1000, radius: float = 0.
                 if hit_depth <= t_accum:
                     accProb = acceptance_probability(C_accum, B_taccum, B_tsample, B_tmin, a_sample)
                     if random.random() <= accProb and hit_depth < t_accum:
-                        t_accum = hit_depth
+                        t_accum = voxel_end(depth_to_voxel(hit_depth))
                         C_accum = a_sample
                         Enk_previous_accum = 0.0
                         k_accum = 1
@@ -501,4 +501,4 @@ def simulate(num_particles: int = 2000, num_rays: int = 1000, radius: float = 0.
     return rays_culled_probabilistic
 
 
-#simulate()
+simulate()

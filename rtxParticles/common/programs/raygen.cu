@@ -90,13 +90,35 @@ namespace pkd {
           return voxelCount.y * voxelCount.z * max(min(voxel.x, voxelCount.x-1), 0) + voxelCount.z * max(min(voxel.y, voxelCount.y-1), 0) + max(min(voxel.z, voxelCount.z-1), 0);
       }
 
+      inline __device__ box3f getVoxelBounds(const RayGenData& self, vec3f pos) {
+          vec3f lowerBound = self.densityContextBuffer[0];
+          vec3f upperBound = self.densityContextBuffer[1];
+          vec3f boundSize = upperBound - lowerBound;
+          vec3i voxelCount = vec3i(self.densityContextBuffer[2]);
+
+
+          vec3f relPos = pos - lowerBound;
+          relPos.x /= boundSize.x;
+          relPos.y /= boundSize.y;
+          relPos.z /= boundSize.z;
+          vec3i voxelLower = vec3i(int(relPos.x * voxelCount.x), int(relPos.y * voxelCount.y), int(relPos.z * voxelCount.z));
+          vec3i voxelUpper = vec3i(int(relPos.x * voxelCount.x) + 1, int(relPos.y * voxelCount.y) + 1, int(relPos.z * voxelCount.z) + 1);
+
+          return box3f(vec3f((float(voxelLower.x) / float(voxelCount.x)) * boundSize.x,
+              (float(voxelLower.y) / float(voxelCount.y)) * boundSize.y,
+              (float(voxelLower.z) / float(voxelCount.z)) * boundSize.z) + lowerBound,
+              vec3f((float(voxelUpper.x) / float(voxelCount.x)) * boundSize.x,
+                  (float(voxelUpper.y) / float(voxelCount.y)) * boundSize.y,
+                  (float(voxelUpper.z) / float(voxelCount.z)) * boundSize.z) + lowerBound);
+      }
+
       inline __device__ float getDensity(const RayGenData& self, vec3f pos) {
 
           vec3f lowerBound = self.densityContextBuffer[0];
           vec3f upperBound = self.densityContextBuffer[1];
           vec3f boundSize = upperBound - lowerBound;
           vec3i voxelCount = vec3i(self.densityContextBuffer[2]);
-          vec3f h = vec3f(1.0f / voxelCount.x, 1.0f / voxelCount.y, 1.0f / voxelCount.z);
+          //vec3f h = vec3f(1.0f / voxelCount.x, 1.0f / voxelCount.y, 1.0f / voxelCount.z);
 
 
           vec3f relPos = pos - lowerBound;
@@ -435,7 +457,12 @@ namespace pkd {
             fs->probabilisticCulling && // culling enabled
             prd.particleID != -1 && // hit
             fs->accumID > 0) { // initialized
-            float d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
+
+            //float d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
+            float t0, t1;
+            clipToBounds(ray, getVoxelBounds(self, ray.origin + prd.t * ray.direction), t0, t1);
+            float d_sample = t1;
+
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
             float a_sample = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
@@ -482,7 +509,7 @@ namespace pkd {
             if (d_sample <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
                 //Update Accum Buffer
                 float u = rnd();
-                if (d_sample <= d_accum
+                if (d_sample < d_accum
                     && u <= accProb) {
                     self.depthConfidenceAccumBufferPtr[pixelIdx].x = d_sample;
                     self.depthConfidenceAccumBufferPtr[pixelIdx].y = a_sample;
