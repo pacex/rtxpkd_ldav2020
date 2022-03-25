@@ -458,10 +458,16 @@ namespace pkd {
             prd.particleID != -1 && // hit
             fs->accumID > 0) { // initialized
 
-            //float d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
-            float t0, t1;
-            clipToBounds(ray, getVoxelBounds(self, ray.origin + prd.t * ray.direction), t0, t1);
-            float d_sample = t1;
+            float d_sample;
+            if (fs->quant) {
+                float t0, t1;
+                clipToBounds(ray, getVoxelBounds(self, ray.origin + prd.t * ray.direction), t0, t1);
+                d_sample = t1;
+            }
+            else {
+                d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
+            }
+            
 
             float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
             float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;

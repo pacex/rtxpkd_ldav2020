@@ -382,6 +382,7 @@ namespace pkd {
         int convIter = 128;
         int nBudget = 25;
         bool debug = false;
+        bool quant = false;
 
         bool dumpModel = false;
 
@@ -531,6 +532,9 @@ namespace pkd {
             else if (arg == "--debug") {
                 debug = true;
             }
+            else if (arg == "--quant") {
+                quant = true;
+            }
             else
                 usage("unknown cmdline arg '" + arg + "'");
         }
@@ -595,6 +599,7 @@ namespace pkd {
         widget.frameState.debugOutput = debug;
         widget.frameState.convergenceIterations = convIter;
         widget.frameState.nBudget = nBudget;
+        widget.frameState.quant = quant;
 
         box3f sceneBounds = particles->getBounds();
         widget.enableInspectMode();
