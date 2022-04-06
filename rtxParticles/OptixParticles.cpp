@@ -110,16 +110,14 @@ namespace pkd {
             [](auto const& lhs, auto const& rhs) { return lhs.pos == rhs.pos; }),
             model->particles.end());
 
+        OptixParticles::model = model;
+
         std::cout << "building model: (#particles = " << model->particles.size() << ")" << std::endl;
 
         /* Density Field*/
-        DensityVolume::buildDensityField(model, OptixParticles::voxel_count);
-
-        densityContextBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(DensityVolume::densityContext[0]), DensityVolume::densityContext.size(), DensityVolume::densityContext.data());
-        owlRayGenSetBuffer(rayGen, "densityContextBuffer", densityContextBuffer);
-
-        densityBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(DensityVolume::particleDensity[0]), DensityVolume::particleDensity.size(), DensityVolume::particleDensity.data());
-        owlRayGenSetBuffer(rayGen, "densityBuffer", densityBuffer);
+        buildDensityField(vec3f(1.0f, 0.0f, 0.0f),
+            vec3f(0.0f, 1.0f, 0.0f),
+            vec3f(0.0f, 0.0f, 1.0f));
 
         /* Acceptance Probability */
         calculateNormalCdf();
@@ -135,6 +133,16 @@ namespace pkd {
         std::cout << "building pipeline" << std::endl;
         owlBuildPipeline(context);
         owlBuildSBT(context);
+    }
+
+    void OptixParticles::buildDensityField(vec3f xUnit, vec3f yUnit, vec3f zUnit) {
+        DensityVolume::buildDensityField(OptixParticles::model, OptixParticles::voxel_count, xUnit, yUnit, zUnit);
+
+        densityContextBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(DensityVolume::densityContext[0]), DensityVolume::densityContext.size(), DensityVolume::densityContext.data());
+        owlRayGenSetBuffer(rayGen, "densityContextBuffer", densityContextBuffer);
+
+        densityBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(DensityVolume::particleDensity[0]), DensityVolume::particleDensity.size(), DensityVolume::particleDensity.data());
+        owlRayGenSetBuffer(rayGen, "densityBuffer", densityBuffer);
     }
 
     void OptixParticles::calculateNormalCdf() {

@@ -18,12 +18,13 @@ namespace pkd {
 
     private:
         static float gauss(float x, float mu, float sigma);
-        static box3i getBoundingVoxels(const Particle p, const float radius, const box3f bounds, const vec3i voxelCount);
-        static float getOverlap(const Particle p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount, const float integratedGauss[], const int nGauss);
+        static box3i getBoundingVoxels(const vec3f p, const float radius, const box3f bounds, const vec3i voxelCount);
+        static float getOverlap(const vec3f p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount, const float integratedGauss[], const int nGauss);
         static vec3f getVoxelLower(const vec3i voxel, const box3f bounds, const vec3i voxelCount);
         static vec3f getVoxelUpper(const vec3i voxel, const box3f bounds, const vec3i voxelCount);
+        static vec3f toDensityVolumeSpace(const vec3f vec, const vec3f x, const vec3f y, const vec3f z, const vec3f c, const bool direction);
 
     public:
-        static void buildDensityField(Model::SP model, const int n);
+        static void buildDensityField(Model::SP model, const int n, const vec3f xUnit, const vec3f yUnit, const vec3f zUnit);
 	};
 }

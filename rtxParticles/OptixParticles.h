@@ -45,6 +45,8 @@ namespace pkd {
 
     virtual void buildModel(Model::SP model, bool override_model = false) = 0;
 
+    void buildDensityField(vec3f xUnit, vec3f yUnit, vec3f zUnit);
+
     void calculateNormalCdf();
     
     void resizeFrameBuffer(const vec2i &newSize);
@@ -91,6 +93,8 @@ namespace pkd {
     static int rec_depth;
     static int voxel_count;
     static float radius;
+
+    Model::SP model;
 
     DensityVolume densityVolume;
   };

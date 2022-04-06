@@ -85,6 +85,14 @@ namespace pkd {
 
 #pragma region Density
 
+      inline __device__ vec3f toDensityVolumeSpace(const RayGenData& self, const vec3f vec, const bool direction) {
+          if (direction)
+              return vec.x * self.densityContextBuffer[3] + vec.y * self.densityContextBuffer[4] + vec.z * self.densityContextBuffer[5];
+
+          vec3f v = vec - self.densityContextBuffer[6];
+          return v.x * self.densityContextBuffer[3] + v.y * self.densityContextBuffer[4] + v.z * self.densityContextBuffer[5];
+      }
+
       inline __device__ int voxelIndex(const RayGenData& self, vec3i voxel) {
           vec3i voxelCount = vec3i(self.densityContextBuffer[2]);
           return voxelCount.y * voxelCount.z * max(min(voxel.x, voxelCount.x-1), 0) + voxelCount.z * max(min(voxel.y, voxelCount.y-1), 0) + max(min(voxel.z, voxelCount.z-1), 0);
@@ -160,16 +168,22 @@ namespace pkd {
           B_d_cull = 0.0f;
           B_d_accum = 0.0f;
 
+          owl::Ray transformedRay = owl::Ray(
+              /* origin   : */ toDensityVolumeSpace(self, ray.origin, false),
+              /* direction: */ toDensityVolumeSpace(self, ray.direction, true),
+              /* tmin     : */ ray.tmin,
+              /* tmax     : */ ray.tmax);
+
           float t0, t1;
           box3f bounds = box3f(self.densityContextBuffer[0], self.densityContextBuffer[1]);
-          if (clipToBounds(ray, bounds, t0, t1)) {
+          if (clipToBounds(transformedRay, bounds, t0, t1)) {
               float sum = 0.0f;
 
 #pragma region Step size calculation
               float step = 0.1f;
-              float absx = fabsf(ray.direction.x);
-              float absy = fabsf(ray.direction.y);
-              float absz = fabsf(ray.direction.z);
+              float absx = fabsf(transformedRay.direction.x);
+              float absy = fabsf(transformedRay.direction.y);
+              float absz = fabsf(transformedRay.direction.z);
 
               if (absx > absy && absx > absz) {
                   step = ((bounds.upper.x - bounds.lower.x) / self.densityContextBuffer[2].x) / absx;
@@ -192,7 +206,7 @@ namespace pkd {
                   
                   float t_next = min(t + step, t1);
 
-                  float localDensity = getDensity(self, ray.origin + (t + 0.5f * step) * ray.direction);                 
+                  float localDensity = getDensity(self, transformedRay.origin + (t + 0.5f * step) * transformedRay.direction);
 
                   if (t >= d_sample) {
                       B_d_sample += localDensity * ((t_next - t) / step);

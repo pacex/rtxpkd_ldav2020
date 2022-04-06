@@ -33,6 +33,8 @@
 #define STB_IMAGE_IMPLEMENTATION 1
 #include "submodules/3rdParty/stb_image.h"
 
+#include "Util.h"
+
 #include <math.h>
 #include <cuda_runtime_api.h>
 #include <cuda_gl_interop.h>
@@ -289,6 +291,28 @@ namespace pkd {
             case 'n': {
                 renderBuffer++;
                 renderBuffer = renderBuffer % 4;
+            } break;
+            case 'd': {
+
+                // TODO: Insert real unit vectors
+                auto& fc = fullCamera;
+                vec3f baseX, baseY, baseZ;
+                baseZ = normalize(fc.position - fc.getPOI());
+                baseX = normalize(cross(baseZ, fc.upVector));
+                baseY = normalize(cross(baseX, baseZ));
+
+                Util::invertColumnMat3(baseX, baseY, baseZ);
+
+                std::cout << "Rebuilding density field..." << std::endl;
+
+                particles.buildDensityField(baseX,
+                    baseY,
+                    baseZ);
+
+                std::cout << "Done." << std::endl;
+
+                frameState.accumID = 0;
+                particles.updateFrameState(frameState);
             } break;
             case 'm': {
                 measure = true;

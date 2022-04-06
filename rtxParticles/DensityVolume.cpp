@@ -11,10 +11,12 @@ namespace pkd {
     std::vector<vec3f> DensityVolume::densityContext = std::vector<vec3f>();
     std::vector<float> DensityVolume::particleDensity = std::vector<float>();
 
+#pragma region Splatting
+
     /* Get all voxels a particle intersects */
-    box3i DensityVolume::getBoundingVoxels(const Particle p, const float radius, const box3f bounds, const vec3i voxelCount) {
-        vec3f relPosLower = (p.pos - vec3f(radius)) - bounds.lower;
-        vec3f relPosUpper = (p.pos + vec3f(radius)) - bounds.lower;
+    box3i DensityVolume::getBoundingVoxels(const vec3f p, const float radius, const box3f bounds, const vec3i voxelCount) {
+        vec3f relPosLower = (p - vec3f(radius)) - bounds.lower;
+        vec3f relPosUpper = (p + vec3f(radius)) - bounds.lower;
         vec3f boundsSize = bounds.upper - bounds.lower;
         relPosLower.x /= boundsSize.x; relPosLower.y /= boundsSize.y; relPosLower.z /= boundsSize.z;
         relPosUpper.x /= boundsSize.x; relPosUpper.y /= boundsSize.y; relPosUpper.z /= boundsSize.z;
@@ -51,9 +53,9 @@ namespace pkd {
     }
 
     /* How much volume of the particle is also inside the given voxel? */
-    float DensityVolume::getOverlap(const Particle p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount, const float integratedGauss[], int nGauss) {
-        vec3f posLower = p.pos - vec3f(radius);
-        vec3f posUpper = p.pos + vec3f(radius);
+    float DensityVolume::getOverlap(const vec3f p, const float radius, const vec3i voxel, const box3f bounds, const vec3i voxelCount, const float integratedGauss[], int nGauss) {
+        vec3f posLower = p - vec3f(radius);
+        vec3f posUpper = p + vec3f(radius);
 
         vec3f voxelLower = getVoxelLower(voxel, bounds, voxelCount);
         vec3f voxelUpper = getVoxelUpper(voxel, bounds, voxelCount);
@@ -68,8 +70,34 @@ namespace pkd {
             * integratedGauss[min(int(linearOverlap.z * nGauss), nGauss - 1)];
     }
 
-    void DensityVolume::buildDensityField(Model::SP model, const int n) {
-        box3f bounds = model->getBounds();
+#pragma endregion
+
+#pragma region Transformation
+    vec3f DensityVolume::toDensityVolumeSpace(const vec3f vec, const vec3f x, const vec3f y, const vec3f z, const vec3f c, const bool direction) {
+        if (direction)
+            return vec.x * x + vec.y * y + vec.z * z;
+
+        vec3f v = vec - c;
+        return v.x * x + v.y * y + v.z * z;
+    }
+#pragma endregion
+
+    void DensityVolume::buildDensityField(Model::SP model, const int n, const vec3f xUnit, const vec3f yUnit, const vec3f zUnit) {
+
+        // Place holder
+        vec3f center = model->getBounds().center();
+
+        vec3f r = vec3f(model->radius);
+
+        box3f bounds = box3f(toDensityVolumeSpace(model->particles[0].pos - r, xUnit, yUnit, zUnit, center, false),
+            toDensityVolumeSpace(model->particles[0].pos + r, xUnit, yUnit, zUnit, center, false));
+
+        // Build axis aligned bounding box in view aligned space
+        for (int i = 1; i < model->particles.size(); i++) {
+            bounds.extend(toDensityVolumeSpace(model->particles[i].pos - r, xUnit, yUnit, zUnit, center, false));
+            bounds.extend(toDensityVolumeSpace(model->particles[i].pos + r, xUnit, yUnit, zUnit, center, false));
+        }
+
         vec3f boundsSize = bounds.upper - bounds.lower;
 
 
@@ -88,10 +116,15 @@ namespace pkd {
         float cellVolume = cellSize.x * cellSize.y * cellSize.z;
 
         // Set density context, i.e. bounds of the covered volume and voxel counts along each dimension
-        densityContext = std::vector<vec3f>(3);
+        densityContext = std::vector<vec3f>(7);
         densityContext[0] = bounds.lower;
         densityContext[1] = bounds.upper;
         densityContext[2] = vec3f(voxelCount.x, voxelCount.y, voxelCount.z);
+
+        densityContext[3] = xUnit;    // x unit vector in density volume space
+        densityContext[4] = yUnit;    // y unit vector in density volume space
+        densityContext[5] = zUnit;    // z unit vector in density volume space
+        densityContext[6] = center;
 
         particleDensity = std::vector<float>(voxelCount.x * voxelCount.y * voxelCount.z, 0);
 
@@ -113,13 +146,14 @@ namespace pkd {
         // Splat particles into voxels
         for (int i = 0; i < model->particles.size(); i++) {
             Particle& p = model->particles[i];
+            vec3f pos = toDensityVolumeSpace(p.pos, xUnit, yUnit, zUnit, center, false);
 
-            box3i boundingVoxels = getBoundingVoxels(p, model->radius, bounds, voxelCount);
+            box3i boundingVoxels = getBoundingVoxels(pos, model->radius, bounds, voxelCount);
             for (int x = boundingVoxels.lower.x; x <= boundingVoxels.upper.x; x++) {
                 for (int y = boundingVoxels.lower.y; y <= boundingVoxels.upper.y; y++) {
                     for (int z = boundingVoxels.lower.z; z <= boundingVoxels.upper.z; z++) {
                         vec3i voxel = vec3i(x, y, z);
-                        float overlap = getOverlap(p, model->radius, voxel, bounds, voxelCount, integratedGauss, nGauss);
+                        float overlap = getOverlap(pos, model->radius, voxel, bounds, voxelCount, integratedGauss, nGauss);
                         particleDensity[voxelCount.y * voxelCount.z * voxel.x + voxelCount.z * voxel.y + voxel.z] += overlap;
                     }
                 }
@@ -134,6 +168,7 @@ namespace pkd {
             
         }
 
+        // Normalize Density
         for (int i = 0; i < particleDensity.size(); i++) {
             particleDensity[i] /= cellVolume;
         }
