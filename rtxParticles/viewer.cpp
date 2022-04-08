@@ -293,8 +293,6 @@ namespace pkd {
                 renderBuffer = renderBuffer % 4;
             } break;
             case 'd': {
-
-                // TODO: Insert real unit vectors
                 auto& fc = fullCamera;
                 vec3f baseX, baseY, baseZ;
                 baseZ = normalize(fc.position - fc.getPOI());
@@ -311,6 +309,11 @@ namespace pkd {
 
                 std::cout << "Done." << std::endl;
 
+                frameState.accumID = 0;
+                particles.updateFrameState(frameState);
+            } break;
+            case 'q': {
+                frameState.quant ^= 1;
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
             } break;

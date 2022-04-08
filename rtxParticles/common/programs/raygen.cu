@@ -431,6 +431,24 @@ namespace pkd {
       }
 #pragma endregion
 
+      if (fs->accumID <= 0){
+          //Framestate changed -> reset buffers, restart accumulation
+          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec4f(1e20f,   // Depth
+              0.0f,     // Confidence
+              1.0f,     // sample count k
+              0.0f);    // expected number of unique particles E(n(k))
+
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec4f(1e20f,    // Depth
+              0.0f,     // Confidence
+              1.0f,     // sample count k
+              0.0f);    // expected number of unique particles E(n(k))
+
+          self.confidentDepthBufferPtr[pixelIdx] = 1e20f;
+
+          self.accumIDLastCulled[pixelIdx] = 0;
+      }
+
+
       //Culling by using depth as t_max
 
       bool converged = fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[pixelIdx]) > fs->convergenceIterations;
@@ -441,6 +459,8 @@ namespace pkd {
           self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
           self.accumIDLastCulled[pixelIdx] = fs->accumID;
       }
+
+
 
       owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f,
           rnd, 1e-6f, self.confidentDepthBufferPtr[pixelIdx]);
@@ -475,11 +495,11 @@ namespace pkd {
             float d_sample;
             if (fs->quant) {
                 float t0, t1;
-                clipToBounds(ray, getVoxelBounds(self, ray.origin + prd.t * ray.direction), t0, t1);
+                clipToBounds(ray, getVoxelBounds(self, ray.origin + (prd.t + 2.0f * self.radius) * ray.direction), t0, t1);
                 d_sample = t1;
             }
             else {
-                d_sample = min(prd.t, self.confidentDepthBufferPtr[pixelIdx]);
+                d_sample = min(prd.t + 2.0f * self.radius, self.confidentDepthBufferPtr[pixelIdx]);
             }
             
 
@@ -579,22 +599,6 @@ namespace pkd {
       if (fs->accumID > 0) {
         col = col + (vec4f)self.accumBufferPtr[pixelIdx];
         norm = norm + (vec4f)self.normalAccumBufferPtr[pixelIdx];
-      }
-      else {
-          //Framestate changed -> reset buffers, restart accumulation
-          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec4f(1e20f,   // Depth
-              0.0f,     // Confidence
-              1.0f,     // sample count k
-              0.0f);    // expected number of unique particles E(n(k))
-
-          self.depthConfidenceCullBufferPtr[pixelIdx] = vec4f(1e20f,    // Depth
-              0.0f,     // Confidence
-              1.0f,     // sample count k
-              0.0f);    // expected number of unique particles E(n(k))
-
-          self.confidentDepthBufferPtr[pixelIdx] = 1e20f;
-
-          self.accumIDLastCulled[pixelIdx] = 0;
       }
         
       self.accumBufferPtr[pixelIdx] = col;

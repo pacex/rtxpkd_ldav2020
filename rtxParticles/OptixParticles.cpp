@@ -239,6 +239,7 @@ namespace pkd {
 
         owlBufferResize(confidentDepthBuffer, fbSize.x * fbSize.y);
         owlRayGenSetBuffer(rayGen, "confidentDepthBuffer", confidentDepthBuffer);
+        
 
         //CoverageBuffer
         if (!coverageBuffer)
