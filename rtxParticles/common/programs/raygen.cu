@@ -431,6 +431,7 @@ namespace pkd {
       }
 #pragma endregion
 
+      // Initialize Buffers
       if (fs->accumID <= 0){
           //Framestate changed -> reset buffers, restart accumulation
           self.depthConfidenceAccumBufferPtr[pixelIdx] = vec4f(1e20f,   // Depth
@@ -487,6 +488,8 @@ namespace pkd {
         norm += vec4f(Normal, 0.f);
 
         //Depth Confidence Accumulation
+
+        /*
         if (!converged && // not yet converged
             fs->probabilisticCulling && // culling enabled
             prd.particleID != -1 && // hit
@@ -515,11 +518,11 @@ namespace pkd {
                 d_sample, d_cull, d_accum,
                 B_d_min, B_d_sample, B_d_cull, B_d_accum);
             
-            /*
-            if (pixelIdx == debugPixelIdx && fs->accumID == 1) {
-                printf("r = %f\n", self.radius / length(fs->camera_screen_du));
-                printf("B_d_min = %f\n", B_d_min);
-            }*/
+            
+            //if (pixelIdx == debugPixelIdx && fs->accumID == 1) {
+            //    printf("r = %f\n", self.radius / length(fs->camera_screen_du));
+            //    printf("B_d_min = %f\n", B_d_min);
+            //}
 
             float accProb = acceptanceProbability(self, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, B_d_sample, B_d_min, a_sample, fs->nBudget);
 
@@ -530,9 +533,9 @@ namespace pkd {
                     self.depthConfidenceCullBufferPtr[pixelIdx].y, B_d_cull, d_accum, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, accProb);
             }
 
-            /*
-            *  ALGORITHM 1
-            */
+            
+            // ALGORITHM 1
+            
 
 
             if (d_sample <= d_cull) {
@@ -574,7 +577,9 @@ namespace pkd {
                 self.depthConfidenceCullBufferPtr[pixelIdx].z = float(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
                 self.depthConfidenceCullBufferPtr[pixelIdx].w = float(self.depthConfidenceAccumBufferPtr[pixelIdx].w);
             }
+            
         }
+        */
       }
 
       //Accumulate color and normal across multiple samples
