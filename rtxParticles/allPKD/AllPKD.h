@@ -30,6 +30,9 @@ namespace pkd {
   {
     AllPKDParticles();
     void buildModel(Model::SP model, bool override_model = false) override;
+    void resizeFrameBuffer(const vec2i& newSize) override;
+
+    OWLGeom geom = 0;
   };
 
 }

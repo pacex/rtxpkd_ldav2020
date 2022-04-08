@@ -49,7 +49,8 @@ namespace pkd {
 
     void calculateNormalCdf();
     
-    void resizeFrameBuffer(const vec2i &newSize);
+    virtual void resizeFrameBuffer(const vec2i& newSize) = 0;
+    void resizeFrameBufferGeneral(const vec2i& newSize);
 
     void updateFrameState(device::FrameState &fs);
 

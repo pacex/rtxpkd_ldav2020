@@ -84,5 +84,9 @@ namespace pkd {
     owlGroupBuildAccel(this->world);
     PING;
   }
+
+  void NoPKDParticles::resizeFrameBuffer(const vec2i& newSize) {
+      OptixParticles::resizeFrameBufferGeneral(newSize);
+  }
   
 }

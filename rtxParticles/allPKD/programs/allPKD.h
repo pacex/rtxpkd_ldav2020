@@ -27,6 +27,15 @@ namespace pkd {
       float        particleRadius;
       int          particleCount;
       box3f        worldBounds;
+
+      int* accumIDLastCulled;
+      float4* depthConfidenceAccumBufferPtr;
+      float4* depthConfidenceCullBufferPtr;
+      float* confidentDepthBufferPtr;
+      FrameState* frameStateBuffer;
+      vec3f* densityContextBuffer;
+      float* densityBuffer;
+      float* normalCdfBuffer;
     };
 
   }

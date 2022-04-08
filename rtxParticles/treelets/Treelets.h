@@ -40,6 +40,7 @@ namespace pkd {
     int maxTreeletSize = 1000;
 
     virtual void buildModel(Model::SP model, bool override_model = false) override;
+    virtual void resizeFrameBuffer(const vec2i& newSize) override;
 
     // vec2i buffer that stores the begin/end for all treelets
     OWLBuffer treeletBuffer;

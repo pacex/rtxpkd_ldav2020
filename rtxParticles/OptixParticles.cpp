@@ -101,7 +101,7 @@ namespace pkd {
         
         owlRayGenSetBuffer(rayGen, "frameStateBuffer", frameStateBuffer);
 
-        resizeFrameBuffer(vec2i(100));
+        //resizeFrameBuffer(vec2i(100));
     }
 
     void OptixParticles::setModel(Model::SP model, bool override_model)
@@ -173,7 +173,7 @@ namespace pkd {
         owlRayGenLaunch2D(rayGen, fbSize.x, fbSize.y);
     }
 
-    void OptixParticles::resizeFrameBuffer(const vec2i& newSize)
+    void OptixParticles::resizeFrameBufferGeneral(const vec2i& newSize)
     {
         fbSize = newSize;
 

@@ -243,4 +243,8 @@ namespace pkd {
     PING;
   }
 
+  void TreeletParticles::resizeFrameBuffer(const vec2i& newSize) {
+      OptixParticles::resizeFrameBufferGeneral(newSize);
+  }
+
 }

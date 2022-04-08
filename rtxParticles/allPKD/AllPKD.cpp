@@ -56,6 +56,15 @@ namespace pkd {
       { "particleCount",  OWL_INT,    OWL_OFFSETOF(AllPKDGeomData,particleCount)},
       { "bounds.lower",   OWL_FLOAT3, OWL_OFFSETOF(AllPKDGeomData,worldBounds.lower)},
       { "bounds.upper",   OWL_FLOAT3, OWL_OFFSETOF(AllPKDGeomData,worldBounds.upper)},
+
+      { "depthConfidenceAccumBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,depthConfidenceAccumBufferPtr)},
+      { "depthConfidenceCullBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,depthConfidenceCullBufferPtr)},
+      { "confidentDepthBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,confidentDepthBufferPtr)},
+      { "frameStateBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,frameStateBuffer)},
+      { "accumIDLastCulled",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,accumIDLastCulled)},
+      { "densityBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,densityBuffer)},
+      { "densityContextBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,densityContextBuffer)},
+      { "normalCdfBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,normalCdfBuffer)},
       { /* sentinel to mark end of list */ }
     };
 
@@ -71,7 +80,7 @@ namespace pkd {
     owlGeomTypeSetClosestHit(allPKDType,0,module,
                              "allPKD_closest_hit");
 
-    OWLGeom geom = owlGeomCreate(context,allPKDType);
+    this->geom = owlGeomCreate(context,allPKDType);
     // from the optix point of view, there is only *one* primitmive in
     // the geometry, the entire pkd tree.
     owlGeomSetPrimCount(geom,1); 
@@ -81,6 +90,16 @@ namespace pkd {
     owlGeomSet1i(geom,"particleCount",(int)model->particles.size());
     owlGeomSet3f(geom,"bounds.lower",(const owl3f&)bounds.lower);
     owlGeomSet3f(geom,"bounds.upper",(const owl3f&)bounds.upper);
+
+    
+    owlGeomSetBuffer(geom, "depthConfidenceAccumBuffer", depthConfidenceAccumBuffer);
+    owlGeomSetBuffer(geom, "depthConfidenceCullBuffer", depthConfidenceCullBuffer);
+    owlGeomSetBuffer(geom, "confidentDepthBuffer", confidentDepthBuffer);
+    owlGeomSetBuffer(geom, "frameStateBuffer", frameStateBuffer);
+    owlGeomSetBuffer(geom, "accumIDLastCulled", accumIDLastCulled);
+    owlGeomSetBuffer(geom, "densityBuffer", densityBuffer);
+    owlGeomSetBuffer(geom, "densityContextBuffer", densityContextBuffer);
+    owlGeomSetBuffer(geom, "normalCdfBuffer", normalCdfBuffer);
     
     owlBuildPrograms(context);
 
@@ -90,6 +109,21 @@ namespace pkd {
     this->world = owlInstanceGroupCreate(context, 1, &ug);
 
     owlGroupBuildAccel(this->world);
+  }
+
+  void AllPKDParticles::resizeFrameBuffer(const vec2i& newSize) {
+
+      OptixParticles::resizeFrameBufferGeneral(newSize);
+      
+      owlGeomSetBuffer(geom, "depthConfidenceAccumBuffer", depthConfidenceAccumBuffer);
+      owlGeomSetBuffer(geom, "depthConfidenceCullBuffer", depthConfidenceCullBuffer);
+      owlGeomSetBuffer(geom, "confidentDepthBuffer", confidentDepthBuffer);
+      owlGeomSetBuffer(geom, "frameStateBuffer", frameStateBuffer);
+      owlGeomSetBuffer(geom, "accumIDLastCulled", accumIDLastCulled);
+      owlGeomSetBuffer(geom, "densityBuffer", densityBuffer);
+      owlGeomSetBuffer(geom, "densityContextBuffer", densityContextBuffer);
+      owlGeomSetBuffer(geom, "normalCdfBuffer", normalCdfBuffer);
+      
   }
   
 }
