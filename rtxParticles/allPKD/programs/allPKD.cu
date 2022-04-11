@@ -302,7 +302,11 @@ namespace pkd {
         float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
         float a_sample = min((CUDART_PI_F * self.particleRadius * self.particleRadius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
 
-
+        if (d_cull == 1e20f || d_sample > d_cull) {
+            d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
+            self.depthConfidenceCullBufferPtr[pixelIdx].x = d_sample;
+        }
+            
         // Density Histogram Integration
         float B_d_min, B_d_sample, B_d_cull, B_d_accum;
 
@@ -328,18 +332,15 @@ namespace pkd {
 
         // ALGORITHM 1
 
+        // Accumulate Culling Confidence
+        float Enk_cull = expectedUniqueParticles(max(1.0f, B_d_min - B_d_cull), self.depthConfidenceCullBufferPtr[pixelIdx].z);
+        float deltaEnk_cull = Enk_cull - self.depthConfidenceCullBufferPtr[pixelIdx].w;
 
+        self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(self.depthConfidenceCullBufferPtr[pixelIdx].y, a_sample, deltaEnk_cull);
+        self.depthConfidenceCullBufferPtr[pixelIdx].z += 1.0f;
+        self.depthConfidenceCullBufferPtr[pixelIdx].w = Enk_cull;
 
-        if (d_sample <= d_cull) {
-            // Accumulate Culling Confidence
-            float Enk_cull = expectedUniqueParticles(max(1.0f, B_d_min - B_d_cull), self.depthConfidenceCullBufferPtr[pixelIdx].z);
-            float deltaEnk_cull = Enk_cull - self.depthConfidenceCullBufferPtr[pixelIdx].w;
-
-            self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(self.depthConfidenceCullBufferPtr[pixelIdx].y, a_sample, deltaEnk_cull);
-            self.depthConfidenceCullBufferPtr[pixelIdx].z += 1.0f;
-            self.depthConfidenceCullBufferPtr[pixelIdx].w = Enk_cull;
-
-        }
+        
 
         if (d_sample <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
             //Update Accum Buffer
