@@ -574,6 +574,7 @@ namespace pkd {
         try {
             particles = loadParticleModel(sceneFileName);
             particles->radius = radius;
+            std::cout << "Particle radius: " << particles->radius << std::endl;
         }
         catch (std::exception const& e) {
             std::cerr << "Could not create model " << e.what() << std::endl;

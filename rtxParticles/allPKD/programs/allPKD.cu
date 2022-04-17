@@ -101,6 +101,7 @@ namespace pkd {
         relPos.x *= voxelCount.x;
         relPos.y *= voxelCount.y;
         relPos.z *= voxelCount.z;
+        
         /*
         relPos -= 0.5f * h;
         relPos.x = fmaxf(0.0f, relPos.x);
@@ -119,7 +120,10 @@ namespace pkd {
 
         float yxInterp0 = mix(xInterp00, xInterp10, fract(relPos.y));
         float yxInterp1 = mix(xInterp01, xInterp11, fract(relPos.y));
+
+        return mix(yxInterp0, yxInterp1, fract(relPos.z));
         */
+        
         return self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z)))];
 
     }
