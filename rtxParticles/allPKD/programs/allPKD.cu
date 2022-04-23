@@ -35,6 +35,40 @@ namespace pkd {
     };
 
 #pragma region Util
+    inline __device__
+        int32_t make_8bit(const float f)
+    {
+        return min(255, max(0, int(f * 256.f)));
+    }
+
+    inline __device__ vec3f transferFunction(const float f)
+    {
+        const int NUM_POINTS = 7;
+        const vec3f colors[NUM_POINTS + 1] = {
+          vec3f(0),
+          vec3f(0,0,1),
+          vec3f(0,1,1),
+          vec3f(0,1,0),
+          vec3f(1,1,0),
+          vec3f(1,0,0),
+          vec3f(1,1,1)
+        };
+        if (f <= 0.f) return vec3f(0.f);
+        float f_scaled = f * (NUM_POINTS - 1);
+        int segment = int(f_scaled);
+        if (segment >= (NUM_POINTS - 1)) return vec3f(1.f);
+        return colors[segment] + fmodf(f_scaled, 1.f) * (colors[segment + 1] - colors[segment]);
+    }
+
+    inline __device__
+        int32_t make_rgba8(const vec4f color)
+    {
+        return
+            (make_8bit(color.x) << 0) +
+            (make_8bit(color.y) << 8) +
+            (make_8bit(color.z) << 16);
+    }
+
     inline __device__ float mix(float a, float b, float t) {
         return a + t * (b - a);
     }
@@ -416,6 +450,8 @@ namespace pkd {
       float tmp_hit_t = t1;
       int tmp_hit_primID = -1;
 
+      int stackCounter = 0;
+
       enum { STACK_DEPTH = 32 };
       StackEntry stackBase[STACK_DEPTH];
       StackEntry *stackPtr = stackBase;
@@ -502,6 +538,8 @@ namespace pkd {
               stackPtr->nodeID = farSide_nodeID;
               ++stackPtr;
 
+              stackCounter++;
+
               nodeID = nearSide_nodeID;
               t0 = nearSide_t0;
               t1 = nearSide_t1;
@@ -522,6 +560,9 @@ namespace pkd {
             if (tmp_hit_primID >= 0 && tmp_hit_t < ray.tmax) {
               optixReportIntersection(tmp_hit_t,0,tmp_hit_primID);
             }
+
+            self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(float(stackCounter) / 200.0f), 0.0f));
+
             return;
           }
           --stackPtr;

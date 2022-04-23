@@ -36,6 +36,7 @@ namespace pkd {
       vec3f* densityContextBuffer;
       float* densityBuffer;
       float* normalCdfBuffer;
+      uint32_t* normalBufferPtr;
     };
 
   }

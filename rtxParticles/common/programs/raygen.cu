@@ -523,16 +523,16 @@ namespace pkd {
       }
 
 
-      self.normalBufferPtr[pixelIdx] = rgba_norm;
+      //self.normalBufferPtr[pixelIdx] = rgba_norm;
 
       if (fs->probabilisticCulling) {
           if (converged) {
               //Converged
-              self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(0.0f, 1.0f, 0.0f, 1.0f));
+              //self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(0.0f, 1.0f, 0.0f, 1.0f));
           }
           else {
               //Not Converged
-              self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(1.0f, 0.0f, 0.0f, 1.0f));
+              //self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(1.0f, 0.0f, 0.0f, 1.0f));
           }
       }
       

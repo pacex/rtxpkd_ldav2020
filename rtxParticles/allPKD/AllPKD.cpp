@@ -65,6 +65,7 @@ namespace pkd {
       { "densityBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,densityBuffer)},
       { "densityContextBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,densityContextBuffer)},
       { "normalCdfBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,normalCdfBuffer)},
+      { "normalBuffer",   OWL_BUFPTR, OWL_OFFSETOF(AllPKDGeomData,normalBufferPtr)},
       { /* sentinel to mark end of list */ }
     };
 
@@ -100,6 +101,7 @@ namespace pkd {
     owlGeomSetBuffer(geom, "densityBuffer", densityBuffer);
     owlGeomSetBuffer(geom, "densityContextBuffer", densityContextBuffer);
     owlGeomSetBuffer(geom, "normalCdfBuffer", normalCdfBuffer);
+    owlGeomSetBuffer(geom, "normalBuffer", normalBuffer);
     
     owlBuildPrograms(context);
 
@@ -123,6 +125,7 @@ namespace pkd {
       owlGeomSetBuffer(geom, "densityBuffer", densityBuffer);
       owlGeomSetBuffer(geom, "densityContextBuffer", densityContextBuffer);
       owlGeomSetBuffer(geom, "normalCdfBuffer", normalCdfBuffer);
+      owlGeomSetBuffer(geom, "normalBuffer", normalBuffer);
       
   }
   
