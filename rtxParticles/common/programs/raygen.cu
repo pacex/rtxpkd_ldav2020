@@ -431,7 +431,7 @@ namespace pkd {
       }
 #pragma endregion
 
-      // Initialize Buffers
+      // Initialize Depth Confidence Buffers
       if (fs->accumID <= 0){
           //Framestate changed -> reset buffers, restart accumulation
           self.depthConfidenceAccumBufferPtr[pixelIdx] = vec4f(1e20f,   // Depth
@@ -459,14 +459,7 @@ namespace pkd {
 
           self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
           self.accumIDLastCulled[pixelIdx] = fs->accumID;
-      }
-
-
-
-      owl::Ray centerRay = Camera::generateRay(*fs, float(pixelID.x) + .5f, float(pixelID.y) + .5f,
-          rnd, 1e-6f, self.confidentDepthBufferPtr[pixelIdx]);
-      
-      
+      }      
 
       PerRayData prd;
       
@@ -486,100 +479,6 @@ namespace pkd {
             Normal = normalize(Normal);
         }
         norm += vec4f(Normal, 0.f);
-
-        //Depth Confidence Accumulation
-
-        /*
-        if (!converged && // not yet converged
-            fs->probabilisticCulling && // culling enabled
-            prd.particleID != -1 && // hit
-            fs->accumID > 0) { // initialized
-
-            float d_sample;
-            if (fs->quant) {
-                float t0, t1;
-                clipToBounds(ray, getVoxelBounds(self, ray.origin + (prd.t + 2.0f * self.radius) * ray.direction), t0, t1);
-                d_sample = t1;
-            }
-            else {
-                d_sample = min(prd.t + 2.0f * self.radius, self.confidentDepthBufferPtr[pixelIdx]);
-            }
-            
-
-            float d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
-            float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
-            float a_sample = min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
-
-
-            // Density Histogram Integration
-            float B_d_min, B_d_sample, B_d_cull, B_d_accum;
-
-            B_d_min = integrateDensityHistogram(self, centerRay,
-                d_sample, d_cull, d_accum,
-                B_d_min, B_d_sample, B_d_cull, B_d_accum);
-            
-            
-            //if (pixelIdx == debugPixelIdx && fs->accumID == 1) {
-            //    printf("r = %f\n", self.radius / length(fs->camera_screen_du));
-            //    printf("B_d_min = %f\n", B_d_min);
-            //}
-
-            float accProb = acceptanceProbability(self, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, B_d_sample, B_d_min, a_sample, fs->nBudget);
-
-            // DEBUG OUTPUT
-            if (fs->debugOutput && pixelIdx == debugPixelIdx) {
-                printf("\033[1;37m%i |\033[0;33m B_d_min= %f,\033[0;31m d_culled= %f,\033[0;36m d_sample= %f,\033[0;33m B_d_sample= %f,\033[0;36m d_cull= %f,\033[0;32m C_cull= %f,\033[0;33m B_d_cull= %f,\033[0;36m d_accum= %f,\033[0;32m C_accum= %f,\033[0;33m B_d_accum= %f,\033[0;34m accProb= %f\033[0m\n", 
-                    fs->accumID, B_d_min, self.confidentDepthBufferPtr[pixelIdx], d_sample, B_d_sample, d_cull, 
-                    self.depthConfidenceCullBufferPtr[pixelIdx].y, B_d_cull, d_accum, self.depthConfidenceAccumBufferPtr[pixelIdx].y, B_d_accum, accProb);
-            }
-
-            
-            // ALGORITHM 1
-            
-
-
-            if (d_sample <= d_cull) {
-                // Accumulate Culling Confidence
-                float Enk_cull = expectedUniqueParticles(max(1.0f, B_d_min - B_d_cull), self.depthConfidenceCullBufferPtr[pixelIdx].z);
-                float deltaEnk_cull = Enk_cull - self.depthConfidenceCullBufferPtr[pixelIdx].w;
-
-                self.depthConfidenceCullBufferPtr[pixelIdx].y = accumulateConfidence(self.depthConfidenceCullBufferPtr[pixelIdx].y, a_sample, deltaEnk_cull);
-                self.depthConfidenceCullBufferPtr[pixelIdx].z += 1.0f;
-                self.depthConfidenceCullBufferPtr[pixelIdx].w = Enk_cull;
-
-            }
-
-            if (d_sample <= self.depthConfidenceAccumBufferPtr[pixelIdx].x) {
-                //Update Accum Buffer
-                float u = rnd();
-                if (d_sample < d_accum
-                    && u <= accProb) {
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].x = d_sample;
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = a_sample;
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].z = 1.0f;
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].w = 0.0f;
-                }
-                else {
-                    // Accumulate Accum Confidence
-                    float Enk_accum = expectedUniqueParticles(max(1.0f, B_d_min - B_d_accum), self.depthConfidenceAccumBufferPtr[pixelIdx].z);
-                    float deltaEnk_accum = Enk_accum - self.depthConfidenceAccumBufferPtr[pixelIdx].w;
-
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].y = accumulateConfidence(self.depthConfidenceAccumBufferPtr[pixelIdx].y, a_sample, deltaEnk_accum);
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].z += 1.0f;
-                    self.depthConfidenceAccumBufferPtr[pixelIdx].w = Enk_accum;
-                }
-            }
-
-            if (B_d_accum * self.depthConfidenceAccumBufferPtr[pixelIdx].y > B_d_cull * self.depthConfidenceCullBufferPtr[pixelIdx].y) {
-                
-                self.depthConfidenceCullBufferPtr[pixelIdx].x = float(self.depthConfidenceAccumBufferPtr[pixelIdx].x);
-                self.depthConfidenceCullBufferPtr[pixelIdx].y = float(self.depthConfidenceAccumBufferPtr[pixelIdx].y);
-                self.depthConfidenceCullBufferPtr[pixelIdx].z = float(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
-                self.depthConfidenceCullBufferPtr[pixelIdx].w = float(self.depthConfidenceAccumBufferPtr[pixelIdx].w);
-            }
-            
-        }
-        */
       }
 
       //Accumulate color and normal across multiple samples

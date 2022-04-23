@@ -50,6 +50,7 @@ namespace pkd {
       int convergenceIterations = { 128 }; // how many iterations without change until we consider culling converged
       int nBudget = { 25 };             // n_budget for acceptance probability
       bool quant = { 0 };               // voxel backface quantisation
+      bool interp = { 0 };              // interpolate density volume samples
 
       bool debugOutput{ 0 };
       

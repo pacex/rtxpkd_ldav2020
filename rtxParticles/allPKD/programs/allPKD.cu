@@ -85,14 +85,12 @@ namespace pkd {
                 (float(voxelUpper.z) / float(voxelCount.z)) * boundSize.z) + lowerBound);
     }
 
-    inline __device__ float getDensity(const AllPKDGeomData& self, vec3f pos) {
+    inline __device__ float getDensity(const AllPKDGeomData& self, vec3f pos, bool interpolate) {
 
         vec3f lowerBound = self.densityContextBuffer[0];
         vec3f upperBound = self.densityContextBuffer[1];
         vec3f boundSize = upperBound - lowerBound;
         vec3i voxelCount = vec3i(self.densityContextBuffer[2]);
-        //vec3f h = vec3f(1.0f / voxelCount.x, 1.0f / voxelCount.y, 1.0f / voxelCount.z);
-
 
         vec3f relPos = pos - lowerBound;
         relPos.x /= boundSize.x;
@@ -101,8 +99,12 @@ namespace pkd {
         relPos.x *= voxelCount.x;
         relPos.y *= voxelCount.y;
         relPos.z *= voxelCount.z;
+
+        if (!interpolate)
+            return self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z)))];
         
-        /*
+        vec3f h = vec3f(1.0f / voxelCount.x, 1.0f / voxelCount.y, 1.0f / voxelCount.z);
+
         relPos -= 0.5f * h;
         relPos.x = fmaxf(0.0f, relPos.x);
         relPos.y = fmaxf(0.0f, relPos.y);
@@ -122,15 +124,11 @@ namespace pkd {
         float yxInterp1 = mix(xInterp01, xInterp11, fract(relPos.y));
 
         return mix(yxInterp0, yxInterp1, fract(relPos.z));
-        */
-        
-        return self.densityBuffer[voxelIndex(self, vec3i(int(relPos.x), int(relPos.y), int(relPos.z)))];
-
     }
 
     inline __device__ float integrateDensityHistogram(const AllPKDGeomData& self, const owl::Ray& ray,
         const float d_sample, const float d_cull, const float d_accum,
-        float& B_d_min, float& B_d_sample, float& B_d_cull, float& B_d_accum) {
+        float& B_d_min, float& B_d_sample, float& B_d_cull, float& B_d_accum, bool interpolate) {
 
         B_d_min = 0.0f;
         B_d_sample = 0.0f;
@@ -175,7 +173,7 @@ namespace pkd {
 
                 float t_next = min(t + step, t1);
 
-                float localDensity = getDensity(self, transformedRay.origin + (t + 0.5f * step) * transformedRay.direction);
+                float localDensity = getDensity(self, transformedRay.origin + (t + 0.5f * step) * transformedRay.direction, interpolate);
 
                 if (t >= d_sample) {
                     B_d_sample += localDensity * ((t_next - t) / step);
@@ -316,7 +314,7 @@ namespace pkd {
 
         B_d_min = integrateDensityHistogram(self, centerRay,
             d_sample, d_cull, d_accum,
-            B_d_min, B_d_sample, B_d_cull, B_d_accum);
+            B_d_min, B_d_sample, B_d_cull, B_d_accum, fs->interp);
 
 
         //if (pixelIdx == debugPixelIdx && fs->accumID == 1) {
