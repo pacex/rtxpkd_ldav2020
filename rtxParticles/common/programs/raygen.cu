@@ -449,6 +449,7 @@ namespace pkd {
           self.accumIDLastCulled[pixelIdx] = 0;
       }
 
+      self.normalBufferPtr[pixelIdx] = 0;
 
       //Culling by using depth as t_max
 

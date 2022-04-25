@@ -450,7 +450,7 @@ namespace pkd {
       float tmp_hit_t = t1;
       int tmp_hit_primID = -1;
 
-      int stackCounter = 0;
+      
 
       enum { STACK_DEPTH = 32 };
       StackEntry stackBase[STACK_DEPTH];
@@ -473,6 +473,10 @@ namespace pkd {
       };
       unsigned int const numParticles = self.particleCount;
       float const particleRadius = self.particleRadius;
+
+      // Visual representation of clipped subtrees
+      int clippedCounter = 0;
+      int const maxTreeLevel = log2f(numParticles);
 
       while (1) {
         // while we have anything to traverse ...
@@ -530,7 +534,12 @@ namespace pkd {
           const bool need_nearSide = nearSide_valid && nearSide_t0 < nearSide_t1;
           const bool need_farSide  = farSide_valid  && farSide_t0  < farSide_t1;
 
-          if (!(need_nearSide || need_farSide)) break; // pop ...
+          if (!(need_nearSide || need_farSide)) {
+
+              clippedCounter += pow(2, maxTreeLevel - int(log2f(float(nodeID + 1))));
+
+              break; // pop ...
+          }
 
           if (need_nearSide && need_farSide) {
               stackPtr->t0 = farSide_t0;
@@ -538,13 +547,13 @@ namespace pkd {
               stackPtr->nodeID = farSide_nodeID;
               ++stackPtr;
 
-              stackCounter++;
-
               nodeID = nearSide_nodeID;
               t0 = nearSide_t0;
               t1 = nearSide_t1;
               continue;
           }
+
+          clippedCounter += pow(2, maxTreeLevel - int(log2f(float(2 * nodeID + 2))));
 
           nodeID = need_nearSide ? nearSide_nodeID : farSide_nodeID;
           t0 = need_nearSide ? nearSide_t0 : farSide_t0;
@@ -561,7 +570,7 @@ namespace pkd {
               optixReportIntersection(tmp_hit_t,0,tmp_hit_primID);
             }
 
-            self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(float(stackCounter) / 200.0f), 0.0f));
+            self.normalBufferPtr[pixelIdx] = make_rgba8(vec4f(transferFunction(float(clippedCounter) / numParticles), 0.0f));
 
             return;
           }
