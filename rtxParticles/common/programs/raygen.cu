@@ -197,6 +197,17 @@ namespace pkd {
 
       // Initialize Depth Confidence Buffers
       if (fs->accumID <= 0){
+          //Framestate changed -> reset buffers, restart accumulation
+          self.depthConfidenceAccumBufferPtr[pixelIdx] = vec4f(1e20f,   // Depth
+              0.0f,     // Confidence
+              1.0f,     // sample count k
+              0.0f);    // expected number of unique particles E(n(k))
+
+          self.depthConfidenceCullBufferPtr[pixelIdx] = vec4f(1e20f,    // Depth
+              0.0f,     // Confidence
+              1.0f,     // sample count k
+              0.0f);    // expected number of unique particles E(n(k))
+
           self.confidentDepthBufferPtr[pixelIdx] = 1e20f;
           self.accumIDLastCulled[pixelIdx] = 0;
       }
@@ -230,15 +241,6 @@ namespace pkd {
               self.accumIDLastCulled[pixelIdx] = fs->accumID;
           }
       }
-
-      /*
-      if (fs->probabilisticCulling && !converged && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ
-          && self.confidentDepthBufferPtr[pixelIdx] > self.depthConfidenceCullBufferPtr[pixelIdx].x) {
-
-          self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
-          self.accumIDLastCulled[pixelIdx] = fs->accumID;
-      }
-      */
 
       PerRayData prd;
       
