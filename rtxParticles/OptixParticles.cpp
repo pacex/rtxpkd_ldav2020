@@ -84,9 +84,6 @@ namespace pkd {
           { "rec_depth",       OWL_INT,    OWL_OFFSETOF(RayGenData,rec_depth)},
           { "radius",       OWL_FLOAT,    OWL_OFFSETOF(RayGenData,radius)},
           { "accumIDLastCulled",       OWL_BUFPTR,    OWL_OFFSETOF(RayGenData,accumIDLastCulled)},
-          { "densityBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityBuffer)},
-          { "densityContextBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,densityContextBuffer)},
-          { "normalCdfBuffer",    OWL_BUFPTR, OWL_OFFSETOF(RayGenData,normalCdfBuffer)},
           { /* sentinel to mark end of list */ }
         };
 
@@ -139,10 +136,7 @@ namespace pkd {
         DensityVolume::buildDensityField(OptixParticles::model, OptixParticles::voxel_count, xUnit, yUnit, zUnit);
 
         densityContextBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(DensityVolume::densityContext[0]), DensityVolume::densityContext.size(), DensityVolume::densityContext.data());
-        owlRayGenSetBuffer(rayGen, "densityContextBuffer", densityContextBuffer);
-
         densityBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(DensityVolume::particleDensity[0]), DensityVolume::particleDensity.size(), DensityVolume::particleDensity.data());
-        owlRayGenSetBuffer(rayGen, "densityBuffer", densityBuffer);
     }
 
     void OptixParticles::calculateNormalCdf() {
@@ -164,7 +158,6 @@ namespace pkd {
             cdf[i + 2] = 0.5f * (1.0f + erff(x / M_SQRT2));
         }
         normalCdfBuffer = owlDeviceBufferCreate(context, OWL_USER_TYPE(cdf[0]), cdf.size(), cdf.data());
-        owlRayGenSetBuffer(rayGen, "normalCdfBuffer", normalCdfBuffer);
     }
 
 

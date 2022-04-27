@@ -357,8 +357,6 @@ namespace pkd {
                 frameState.interp = (GetPrivateProfileInt("Properties", "interp", 0, fname.c_str()) == 1) ? true : false;
                 frameState.nBudget = GetPrivateProfileInt("Properties", "nBudget", 25, fname.c_str());
 
-                auto& fc = fullCamera;
-
                 std::string c_occ, xfrom, yfrom, zfrom, xto, yto, zto, xup, yup, zup;
                 GetPrivateProfileString(section.c_str(), "xfrom", "0.0", const_cast<char*>(xfrom.c_str()), 16, fname.c_str());
                 GetPrivateProfileString(section.c_str(), "yfrom", "0.0", const_cast<char*>(yfrom.c_str()), 16, fname.c_str());

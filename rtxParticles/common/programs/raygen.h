@@ -40,9 +40,6 @@ namespace pkd {
       float* confidentDepthBufferPtr;
       Particle *particleBuffer;
       FrameState *frameStateBuffer;
-      vec3f* densityContextBuffer;
-      float* densityBuffer;
-      float* normalCdfBuffer;
     };
     
   }
