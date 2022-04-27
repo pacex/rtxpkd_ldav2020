@@ -454,12 +454,39 @@ namespace pkd {
 
       bool converged = fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[pixelIdx]) > fs->convergenceIterations;
       
+      const int KERNEL_SIZE = fs->kernelSize;
+
+      if (fs->probabilisticCulling && !converged) {
+          float d_repr = -1.0f;
+          float c_repr = 0.0f;
+          int pixel_count = 0;
+          for (int i = max(0,pixelID.x - KERNEL_SIZE); i <= min(self.fbSize.x - 1, pixelID.x + KERNEL_SIZE); i++) {
+              for (int j = max(0, pixelID.y - KERNEL_SIZE); j <= min(self.fbSize.y - 1, pixelID.y + KERNEL_SIZE); j++) {
+                  int pxID = i + self.fbSize.x * j;
+
+                  d_repr = max(d_repr, self.depthConfidenceCullBufferPtr[pxID].x);
+                  c_repr += self.depthConfidenceCullBufferPtr[pxID].y;
+
+                  pixel_count++;
+              }
+          }
+
+          c_repr /= float(pixel_count);
+
+          if (c_repr >= fs->c_occ && self.confidentDepthBufferPtr[pixelIdx] > d_repr) {
+              self.confidentDepthBufferPtr[pixelIdx] = d_repr;
+              self.accumIDLastCulled[pixelIdx] = fs->accumID;
+          }
+      }
+
+      /*
       if (fs->probabilisticCulling && !converged && self.depthConfidenceCullBufferPtr[pixelIdx].y >= fs->c_occ
           && self.confidentDepthBufferPtr[pixelIdx] > self.depthConfidenceCullBufferPtr[pixelIdx].x) {
 
           self.confidentDepthBufferPtr[pixelIdx] = self.depthConfidenceCullBufferPtr[pixelIdx].x;
           self.accumIDLastCulled[pixelIdx] = fs->accumID;
-      }      
+      }
+      */
 
       PerRayData prd;
       
