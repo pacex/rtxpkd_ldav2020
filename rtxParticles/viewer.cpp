@@ -154,12 +154,15 @@ namespace pkd {
                 static int g_frameID = 0;
                 int frameID = g_frameID++;
                 if (frameID == MEASURE_WARMUP_COUNT) {
+
+                    std::cout << "#measure: starting..." << std::endl;
+
                     auto const t_start = std::chrono::high_resolution_clock::now();
 
                     for (int i = 0; i < MEASURE_FRAME_COUNT; ++i) {
-                        frameState.accumID = i;
-                        particles.updateFrameState(frameState);
                         particles.render();
+                        frameState.accumID++;
+                        particles.updateFrameState(frameState);
                     }
                     auto const t_end = std::chrono::high_resolution_clock::now();
                     auto const duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start);
@@ -169,6 +172,7 @@ namespace pkd {
                         << " frames in " << duration.count() << "ms" << std::endl;
 
                     printf("AVG_FPS %.1f \n", (MEASURE_FRAME_COUNT / (duration.count() / 1000.0f)));
+                    std::cout << "#measure: finished." << std::endl;
                     //exit(0);
                     measure = false;
                     g_frameID = 0;
@@ -337,6 +341,47 @@ namespace pkd {
                 particles.updateFrameState(frameState);
                 break;
             }
+            case 'l': {
+                std::cout << "Enter .ini file path:" << std::endl;
+                std::string fname;
+                std::cin >> fname;
+                std::cout << "Enter view ID:" << std::endl;
+                std::string section;
+                std::cin >> section;
+
+
+                frameState.samplesPerPixel = GetPrivateProfileInt("Properties", "spp", 1, fname.c_str());
+                frameState.convergenceIterations = GetPrivateProfileInt("Properties", "conv-iter", 256, fname.c_str());
+                frameState.kernelSize = GetPrivateProfileInt("Properties", "kernel-size", 0, fname.c_str());
+                frameState.quant = (GetPrivateProfileInt("Properties", "quant", 0, fname.c_str()) == 1) ? true : false;
+                frameState.interp = (GetPrivateProfileInt("Properties", "interp", 0, fname.c_str()) == 1) ? true : false;
+                frameState.nBudget = GetPrivateProfileInt("Properties", "nBudget", 25, fname.c_str());
+
+                std::string c_occ, xfrom, yfrom, zfrom, xto, yto, zto, xup, yup, zup;
+                GetPrivateProfileString(section.c_str(), "xfrom", "0.0", const_cast<char*>(xfrom.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "yfrom", "0.0", const_cast<char*>(yfrom.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "zfrom", "0.0", const_cast<char*>(zfrom.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "xto", "0.0", const_cast<char*>(xto.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "yto", "0.0", const_cast<char*>(yto.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "zto", "0.0", const_cast<char*>(zto.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "xup", "0.0", const_cast<char*>(xup.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "yup", "1.0", const_cast<char*>(yup.c_str()), 16, fname.c_str());
+                GetPrivateProfileString(section.c_str(), "zup", "0.0", const_cast<char*>(zup.c_str()), 16, fname.c_str());
+                GetPrivateProfileString("Properties", "c_occ", "0.0", const_cast<char*>(c_occ.c_str()), 16, fname.c_str());
+                
+                frameState.c_occ = std::stof(c_occ);
+
+                frameState.probabilisticCulling = false;
+
+                setCameraOrientation(vec3f(std::stof(xfrom), std::stof(yfrom), std::stof(zfrom)),
+                    vec3f(std::stof(xto), std::stof(yto), std::stof(zto)),
+                    vec3f(std::stof(xup), std::stof(yup), std::stof(zup)),
+                    70.0f);
+
+                std::cout << "#testcase: loaded." << std::endl;
+
+                break;
+            }
             case '!': {
                 screenShot();
             } break;
@@ -408,6 +453,7 @@ namespace pkd {
         int voxelCount = 64;
         int convIter = 128;
         int nBudget = 25;
+        int kernelSize = 0;
         bool debug = false;
         bool quant = false;
         bool interp = false;
@@ -566,6 +612,9 @@ namespace pkd {
             else if (arg == "--interp") {
                 interp = true;
             }
+            else if (arg == "--kernel-size") {
+                kernelSize = std::atof(argv[++i]);
+            }
             else
                 usage("unknown cmdline arg '" + arg + "'");
         }
@@ -635,6 +684,7 @@ namespace pkd {
         widget.frameState.nBudget = nBudget;
         widget.frameState.quant = quant;
         widget.frameState.interp = interp;
+        widget.frameState.kernelSize = kernelSize;
 
         box3f sceneBounds = particles->getBounds();
         widget.enableInspectMode();

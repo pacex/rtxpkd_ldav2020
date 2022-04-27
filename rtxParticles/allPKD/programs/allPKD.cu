@@ -338,9 +338,9 @@ namespace pkd {
         float d_accum = self.depthConfidenceAccumBufferPtr[pixelIdx].x;
         float a_sample = min((CUDART_PI_F * self.particleRadius * self.particleRadius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f); //Constant for now
 
-        if (d_cull == 1e20f || d_sample > d_cull) {
-            d_cull = self.depthConfidenceCullBufferPtr[pixelIdx].x;
+        if (d_cull == 1e20f || d_sample > d_cull) {  
             self.depthConfidenceCullBufferPtr[pixelIdx].x = d_sample;
+            d_cull = d_sample;
         }
             
         // Density Histogram Integration
@@ -399,6 +399,7 @@ namespace pkd {
             }
         }
 
+        
         if (B_d_accum * self.depthConfidenceAccumBufferPtr[pixelIdx].y > B_d_cull * self.depthConfidenceCullBufferPtr[pixelIdx].y) {
 
             self.depthConfidenceCullBufferPtr[pixelIdx].x = float(self.depthConfidenceAccumBufferPtr[pixelIdx].x);
@@ -406,7 +407,6 @@ namespace pkd {
             self.depthConfidenceCullBufferPtr[pixelIdx].z = float(self.depthConfidenceAccumBufferPtr[pixelIdx].z);
             self.depthConfidenceCullBufferPtr[pixelIdx].w = float(self.depthConfidenceAccumBufferPtr[pixelIdx].w);
         }
-
     }
 
 #pragma endregion

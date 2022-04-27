@@ -51,6 +51,7 @@ namespace pkd {
       int nBudget = { 25 };             // n_budget for acceptance probability
       bool quant = { 0 };               // voxel backface quantisation
       bool interp = { 0 };              // interpolate density volume samples
+      int kernelSize = { 0 };           // Size of culling kernel
 
       bool debugOutput{ 0 };
       
