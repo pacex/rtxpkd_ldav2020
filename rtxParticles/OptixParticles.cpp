@@ -140,6 +140,8 @@ namespace pkd {
     }
 
     void OptixParticles::calculateNormalCdf() {
+
+        // Build Gaussian lookup table for acceptance probability
         float z_alpha = 3.09f;
         int n = 256;
 

@@ -188,12 +188,6 @@ namespace pkd {
           fs->accumID//for real accumulation
       );
 
-      //DEBUG
-#pragma region DEBUG
-      if (pixelIdx == debugPixelIdx && fs->accumID == 0) {
-          //printf("a = %f\n", min((CUDART_PI_F * self.radius * self.radius) / length(cross(fs->camera_screen_du, fs->camera_screen_dv)), 0.5f));
-      }
-#pragma endregion
 
       // Initialize Depth Confidence Buffers
       if (fs->accumID <= 0){
@@ -208,21 +202,22 @@ namespace pkd {
               1.0f,     // sample count k
               0.0f);    // expected number of unique particles E(n(k))
 
-          self.confidentDepthBufferPtr[pixelIdx] = 1e20f;
-          self.accumIDLastCulled[pixelIdx] = 0;
+          self.confidentDepthBufferPtr[pixelIdx] = 1e20f;   // t_max buffer, future rays will be cast with this t_max
+          self.accumIDLastCulled[pixelIdx] = 0;             // accumID at which last culling decision occurred
       }
 
-
-      //Culling by using depth as t_max
-
+      // Has no culling decision occurred for long enough? -> If so, assume convergence
       bool converged = fs->samplesPerPixel * (fs->accumID - self.accumIDLastCulled[pixelIdx]) > fs->convergenceIterations;
       
       const int KERNEL_SIZE = fs->kernelSize;
 
+      // If not converged, check if we can cull
       if (fs->probabilisticCulling && !converged) {
           float d_repr = -1.0f;
           float c_repr = 0.0f;
           int pixel_count = 0;
+
+          // Traverse neighborhood kernel
           for (int i = max(0,pixelID.x - KERNEL_SIZE); i <= min(self.fbSize.x - 1, pixelID.x + KERNEL_SIZE); i++) {
               for (int j = max(0, pixelID.y - KERNEL_SIZE); j <= min(self.fbSize.y - 1, pixelID.y + KERNEL_SIZE); j++) {
                   int pxID = i + self.fbSize.x * j;
@@ -236,6 +231,7 @@ namespace pkd {
 
           c_repr /= float(pixel_count);
 
+          // If culling possible, set t_max and update accumID buffer
           if (c_repr >= fs->c_occ && self.confidentDepthBufferPtr[pixelIdx] > d_repr) {
               self.confidentDepthBufferPtr[pixelIdx] = d_repr;
               self.accumIDLastCulled[pixelIdx] = fs->accumID;
@@ -306,6 +302,7 @@ namespace pkd {
 
       self.normalBufferPtr[pixelIdx] = rgba_norm;
 
+      // Write convergence status to normal buffer
       if (fs->probabilisticCulling) {
           if (converged) {
               //Converged

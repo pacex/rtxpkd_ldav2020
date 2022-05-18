@@ -44,7 +44,7 @@ namespace pkd {
             (float(voxel.z) / float(voxelCount.z)) * boundsSize.z);
     }
 
-    /* Get upper boudns of voxel */
+    /* Get upper bounds of voxel */
     vec3f DensityVolume::getVoxelUpper(const vec3i voxel, const box3f bounds, const vec3i voxelCount) {
         vec3f boundsSize = bounds.upper - bounds.lower;
         return bounds.lower + vec3f((float(voxel.x + 1) / float(voxelCount.x)) * boundsSize.x,
@@ -84,7 +84,6 @@ namespace pkd {
 
     void DensityVolume::buildDensityField(Model::SP model, const int n, const vec3f xUnit, const vec3f yUnit, const vec3f zUnit) {
 
-        // Place holder
         vec3f center = model->getBounds().center();
 
         vec3f r = vec3f(model->radius);
@@ -157,15 +156,7 @@ namespace pkd {
                         particleDensity[voxelCount.y * voxelCount.z * voxel.x + voxelCount.z * voxel.y + voxel.z] += overlap;
                     }
                 }
-            }
-
-            // OLD
-            /*
-            vec3f relPos = p.pos - bounds.lower;
-            vec3i voxelPos = vec3i(int(floor(voxelCount.x * relPos.x / boundsSize.x)), int(floor(voxelCount.y * relPos.y / boundsSize.y)), int(floor(voxelCount.z * relPos.z / boundsSize.z)));
-            particleDensity[voxelCount.y * voxelCount.z * voxelPos.x + voxelCount.z * voxelPos.y + voxelPos.z] += 1.0f;
-            */
-            
+            }           
         }
 
         // Normalize Density

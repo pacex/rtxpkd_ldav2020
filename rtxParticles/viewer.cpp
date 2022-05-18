@@ -297,14 +297,14 @@ namespace pkd {
                     << fc.upVector.y << " "
                     << fc.upVector.z << std::endl;
             } break;
-            case 'f': {
+            case 'f': { // Toggle fps output
                 logFps ^= 1;
             } break;
-            case 'n': {
+            case 'n': { // Switch displayed buffer
                 renderBuffer++;
                 renderBuffer = renderBuffer % 4;
             } break;
-            case 'd': {
+            case 'd': { // Transform density grid to align with current view
                 auto& fc = fullCamera;
                 vec3f baseX, baseY, baseZ;
                 baseZ = normalize(fc.position - fc.getPOI());
@@ -324,26 +324,26 @@ namespace pkd {
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
             } break;
-            case 'q': {
+            case 'q': { // Toggle depth quantisation
                 frameState.quant ^= 1;
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
             } break;
-            case 'm': {
+            case 'm': { // Measure performance
                 measure = true;
             } break;
-            case 'M': {
+            case 'M': { // Reset accumulation and measure performance
                 measure = true;
                 frameState.probabilisticCulling ^= 1;
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
             } break;
-            case 'o': {
+            case 'o': { // Toggle projection (culling only works correctly with ortho projection)
                 frameState.orthoProjection ^= 1;
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
             } break;
-            case 'p': {
+            case 'p': { // Toggle probabilistic culling
                 frameState.probabilisticCulling ^= 1;
                 frameState.accumID = 0;
                 particles.updateFrameState(frameState);
