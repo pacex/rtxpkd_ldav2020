@@ -54,7 +54,7 @@
 #include <fstream>
 
 #define MEASURE_WARMUP_COUNT 1
-#define MEASURE_FRAME_COUNT 400
+#define MEASURE_FRAME_COUNT 20
 
 
 namespace pkd {
@@ -94,6 +94,7 @@ namespace pkd {
 
         OptixParticles& particles;
         int renderBuffer; //Buffer to render: 0=col, 1=norm, 2=depth, 3=coverage
+        bool logFps = false;
 
         ModelViewer(owl::viewer::GlutWindow::SP window,
             OptixParticles& particles)
@@ -234,8 +235,12 @@ namespace pkd {
                 char newTitle[1000];
                 sprintf(newTitle, "rtxPKD (%3.1ffps)", fps);
                 window->setTitle(newTitle);
+
+                if (logFps) {
+                    std::cout << thisFPS << std::endl;
+                }
             }
-            t_last = t_now;
+            t_last = getCurrentTime();
 
 
             frameState.accumID++;
@@ -291,6 +296,9 @@ namespace pkd {
                     << fc.upVector.x << " "
                     << fc.upVector.y << " "
                     << fc.upVector.z << std::endl;
+            } break;
+            case 'f': {
+                logFps ^= 1;
             } break;
             case 'n': {
                 renderBuffer++;
